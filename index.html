@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>旗揚げAIアシスタント</title>
-  <!-- 文字認識ライブラリ -->
-  <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
+  <title>旗揚げAI（不具合修正版）</title>
+  <!-- 文字認識ライブラリ（安定版のCDNに変更） -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
   <style>
     :root {
       --bg-color: #010811;
@@ -13,214 +13,75 @@
       --border-color: #0091ff;
       --text-color: #ffffff;
       --text-muted: #62a3ff;
-      --glow-color: rgba(0, 145, 255, 0.4);
       --success-color: #00ffcc;
-      --success-glow: rgba(0, 255, 204, 0.4);
+      --error-color: #ff3366;
     }
 
-    * {
-      box-sizing: border-box;
-      font-family: Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { box-sizing: border-box; font-family: sans-serif; margin: 0; padding: 0; }
+    body { background-color: var(--bg-color); color: var(--text-color); width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
+    /* カメラ画面 */
+    .camera-container { position: relative; flex: 1; background: #000; }
+    #camera-video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* カメラエリア */
-    .camera-container {
-      position: relative;
-      flex: 1;
-      background: #000;
-      overflow: hidden;
-    }
-
-    #camera-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    /* ガイド用の薄い全画面オーバーレイ */
-    .scan-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      border: 4px solid transparent;
-      transition: border-color 0.3s;
-    }
-
-    .scanning {
-      animation: scan-pulse 0.5s infinite alternate;
-      border-color: var(--success-color) !important;
-    }
-    @keyframes scan-pulse {
-      from { opacity: 0.7; box-shadow: inset 0 0 20px rgba(0, 255, 204, 0.2); }
-      to { opacity: 1; box-shadow: inset 0 0 40px var(--success-glow); }
+    /* 状態インジケーター（どこで止まっているか可視化） */
+    #status-overlay {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      padding: 8px; background: rgba(0,0,0,0.8); border-radius: 4px;
+      font-size: 0.8rem; border: 1px solid var(--border-color); z-index: 100;
     }
 
     /* 操作パネル */
-    .control-panel {
-      height: 260px;
-      background-color: var(--panel-bg);
-      border-top: 2px solid var(--border-color);
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      z-index: 10;
-    }
+    .control-panel { height: 260px; background: var(--panel-bg); border-top: 2px solid var(--border-color); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .action-container { display: flex; gap: 10px; flex: 1; }
 
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid rgba(0, 145, 255, 0.2);
-      padding-bottom: 5px;
-    }
-
-    .action-container {
-      display: flex;
-      gap: 10px;
-      flex: 1;
-    }
-
-    /* スキャンボタン */
+    /* 大きく押しやすいボタン */
     .scan-trigger-btn {
-      width: 35%;
-      background: linear-gradient(135deg, #0055ff, #00bbff);
-      border: 1px solid var(--success-color);
-      border-radius: 6px;
-      color: #fff;
-      font-size: 1.1rem;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 4px;
+      width: 35%; background: #0055ff; border: 2px solid #fff; border-radius: 8px;
+      color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer;
     }
-    .scan-trigger-btn.active-scan {
-      background: linear-gradient(135deg, #ff0055, #ff5500);
-      border-color: #ffcc00;
-    }
+    .scan-trigger-btn:disabled { background: #333 !important; border-color: #555 !important; color: #888; cursor: not-allowed; }
+    .scan-trigger-btn.active-scan { background: #ff3300; }
 
-    /* 画面モニター */
-    .display-area {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(0, 145, 255, 0.3);
-      border-radius: 4px;
-      padding: 8px;
-    }
+    /* モニターエリア */
+    .display-area { flex: 1; display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.7); border-radius: 4px; padding: 8px; }
+    .status-monitor { display: flex; flex-direction: column; gap: 6px; width: 65%; font-size: 0.75rem; }
+    .monitor-row span { color: #fff; font-weight: bold; }
+    .comparison-meter { font-size: 0.85rem; background: #001122; padding: 4px; border-radius: 4px; text-align: center; color: #ffcc00; font-weight: bold; }
+    .action-result { font-size: 1.2rem; font-weight: bold; color: var(--success-color); }
 
-    .status-monitor {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      width: 65%;
-    }
-    .monitor-row {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .monitor-row span {
-      color: #fff;
-      font-weight: bold;
-    }
-    
-    .comparison-meter {
-      font-size: 0.9rem;
-      background: #001122;
-      padding: 4px;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 145, 255, 0.2);
-      text-align: center;
-      color: #ffcc00;
-      font-weight: bold;
-    }
+    /* 棒人間 */
+    .avatar-container { width: 80px; height: 80px; background: #000; border: 1px solid var(--border-color); border-radius: 4px; }
+    .stickman { width: 100%; height: 100%; }
+    .stickman line, .stickman circle { stroke: var(--border-color); stroke-width: 6; fill: none; stroke-linecap: round; }
+    .stickman .active-part { stroke: var(--success-color); }
 
-    .action-result {
-      font-size: 1.3rem;
-      font-weight: bold;
-      color: var(--success-color);
-      text-shadow: 0 0 8px var(--success-glow);
-    }
-
-    /* 棒人間アバター */
-    .avatar-container {
-      width: 85px;
-      height: 85px;
-      background: #000;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .stickman {
-      width: 100%;
-      height: 100%;
-    }
-    .stickman line, .stickman circle {
-      stroke: var(--border-color);
-      stroke-width: 6;
-      fill: none;
-      stroke-linecap: round;
-      transition: all 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-    }
-    .stickman .active-part {
-      stroke: var(--success-color);
-    }
-
-    /* 非表示の画像処理用キャンバス */
-    #hidden-canvas {
-      display: none;
-    }
+    #hidden-canvas { display: none; }
   </style>
 </head>
 <body>
 
   <div class="camera-container">
+    <!-- 現在の状態を伝える最重要ランプ -->
+    <div id="status-overlay">
+      システム状態: <span id="sys-status" style="color:yellow;">● 起動中...</span><br>
+      カメラ状態: <span id="cam-status" style="color:yellow;">● 準備中...</span>
+    </div>
     <video id="camera-video" autoplay playsinline muted></video>
-    <!-- 枠を無くし、全画面をスキャンしている目印のガイドのみ表示 -->
-    <div id="scan-guide" class="scan-overlay"></div>
   </div>
 
   <div class="control-panel">
-    <div class="panel-header">
-      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【全画面一括スキャンモード】</div>
-      <div id="sys-status" style="font-size:0.7rem; color:var(--success-color);">● 起動中...</div>
-    </div>
-
     <div class="action-container">
       
-      <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()">
-        <span id="btn-main-text">スキャン開始</span>
-        <span style="font-size:0.6rem; opacity:0.8;">画面全体を解析</span>
+      <!-- AIの準備が終わるまで押せないようにロックをかける設定にしました -->
+      <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()" disabled>
+        スキャン<br>開始
       </button>
 
       <div class="display-area">
         <div class="status-monitor">
-          <!-- 画面全体から拾った生のテキスト情報をここにすべて映し出します -->
-          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">読取テキスト: <span id="log-raw-text" style="color: #ffaa00;">待機中...</span></div>
-          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">抽出データ: <span id="log-extracted" style="color: #00ffcc;">待機中...</span></div>
+          <div class="monitor-row">見えた文字: <span id="log-raw-text" style="color: #ffaa00;">待機中...</span></div>
+          <div class="monitor-row">見つかった数: <span id="log-extracted" style="color: #00ffcc;">待機中...</span></div>
           <div class="comparison-meter" id="log-comparison">左 [--]  待機中  [--] 右</div>
           <div class="action-result" id="log-action">ポーズ待機</div>
         </div>
@@ -231,10 +92,8 @@
             <line x1="50" y1="75" x2="35" y2="95" />
             <line x1="50" y1="75" x2="65" y2="95" />
             <circle cx="50" cy="30" r="10" />
-            <line id="l-arm-1" x1="50" y1="45" x2="32" y2="45" />
-            <line id="l-arm-2" x1="32" y1="45" x2="15" y2="45" />
-            <line id="r-arm-1" x1="50" y1="45" x2="68" y2="45" />
-            <line id="r-arm-2" x1="68" y1="45" x2="85" y2="45" />
+            <line id="l-arm-1" x1="50" y1="45" x2="32" y2="45" /><line id="l-arm-2" x1="32" y1="45" x2="15" y2="45" />
+            <line id="r-arm-1" x1="50" y1="45" x2="68" y2="45" /><line id="r-arm-2" x1="68" y1="45" x2="85" y2="45" />
           </svg>
         </div>
       </div>
@@ -251,74 +110,85 @@
 
     const PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
 
+    // 1. AI読込（エラーハンドリングを強化）
     async function initOCR() {
-      document.getElementById('sys-status').textContent = "● AI準備中...";
-      ocrWorker = await Tesseract.createWorker('jpn');
-      
-      // ゲームで使用される可能性のある重要キーワードと数字に絞って誤認識を防止
-      await ocrWorker.setParameters({
-        tessedit_char_whitelist: '0123456789０１２３４５６７８９倍数素数大きい小さい方上げて下げるけ倍大中小分×÷+-*/= '
-      });
-      document.getElementById('sys-status').textContent = "● スタンバイ完了";
+      try {
+        updateStatus('sys-status', '● AIエンジン初期化中...', 'yellow');
+        ocrWorker = await Tesseract.createWorker('jpn');
+        
+        await ocrWorker.setParameters({
+          tessedit_char_whitelist: '0123456789０１２３４５６７８９倍数素数大きい小さい方上げて下げるけ倍大中小分×÷+-*/= '
+        });
+        
+        updateStatus('sys-status', '● 準備完了！スキャンできます', '#00ffcc');
+        // AIの準備ができたらボタンのロックを解除
+        document.getElementById('main-scan-btn').disabled = false;
+      } catch (err) {
+        updateStatus('sys-status', '❌ AI起動失敗: 再読み込みしてください', '#ff3366');
+        console.error(err);
+      }
     }
 
+    // 2. カメラ起動（解像度設定を標準的にしてエラー回避）
     async function initCamera() {
       try {
+        updateStatus('cam-status', '● カメラアクセス要求中...', 'yellow');
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 },
+          video: { facingMode: "environment" }, // よりエラーの出にくい設定に変更
           audio: false
         });
-        document.getElementById('camera-video').srcObject = stream;
+        const video = document.getElementById('camera-video');
+        video.srcObject = stream;
+        updateStatus('cam-status', '● 映像受信中（正常）', '#00ffcc');
       } catch (err) {
-        document.getElementById('sys-status').textContent = "● カメラ未起動";
+        updateStatus('cam-status', '❌ カメラ起動エラー（許可を確認してください）', '#ff3366');
+        console.error(err);
       }
+    }
+
+    function updateStatus(id, text, color) {
+      const el = document.getElementById(id);
+      if (el) { el.textContent = text; el.style.color = color; }
     }
 
     function toggleStreamScan() {
-      if (!isScanning) {
-        startStreaming();
-      } else {
-        stopStreaming();
-      }
+      if (!isScanning) { startStreaming(); } else { stopStreaming(); }
     }
 
     function startStreaming() {
       isScanning = true;
       document.getElementById('main-scan-btn').classList.add('active-scan');
-      document.getElementById('scan-guide').classList.add('scanning');
-      document.getElementById('btn-main-text').textContent = "解析中...";
-      document.getElementById('sys-status').textContent = "● 映像スキャン中...";
+      document.getElementById('main-scan-btn').innerHTML = "一時<br>停止";
+      updateStatus('sys-status', '● スキャン実行中...', '#00ffcc');
 
+      // ループタイマーを回す
       streamTimer = setInterval(async () => {
         if (!isScanning) return;
         await captureAndAnalyzeAll();
-      }, 400); // 処理負荷を考慮し400ms間隔
+      }, 500); // 1秒に2回スキャン
     }
 
     function stopStreaming() {
       isScanning = false;
       document.getElementById('main-scan-btn').classList.remove('active-scan');
-      document.getElementById('scan-guide').classList.remove('scanning');
-      document.getElementById('btn-main-text').textContent = "スキャン開始";
-      document.getElementById('sys-status').textContent = "● スタンバイ完了";
+      document.getElementById('main-scan-btn').innerHTML = "スキャン<br>開始";
+      updateStatus('sys-status', '● スキャンを停止しました', 'yellow');
       if (streamTimer) clearInterval(streamTimer);
     }
 
-    // カメラの暗い画面でも文字をくっきり浮かび上がらせる画像処理
+    // デジタル画像処理（白黒反転）
     function preprocessImage(ctx, w, h) {
       const imgData = ctx.getImageData(0, 0, w, h);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
         let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
-        // 暗い背景の文字を反転させて、白背景に黒文字の形にデジタル処理
-        let color = brightness > 110 ? 0 : 255; 
-        data[i] = color;
-        data[i + 1] = color;
-        data[i + 2] = color;
+        let color = brightness > 120 ? 0 : 255; // 暗い画面の文字を反転させて浮き立たせる
+        data[i] = color; data[i + 1] = color; data[i + 2] = color;
       }
       ctx.putImageData(imgData, 0, 0);
     }
 
+    // 3. 全画面一括解析処理
     async function captureAndAnalyzeAll() {
       const video = document.getElementById('camera-video');
       if (!video.srcObject || video.readyState < 2) return;
@@ -326,51 +196,45 @@
       const canvas = document.getElementById('hidden-canvas');
       const ctx = canvas.getContext('2d');
       
-      // カメラに映っている全画面サイズで処理
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // 画面全体をそのままキャプチャ
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       preprocessImage(ctx, canvas.width, canvas.height); 
 
       try {
         const res = await ocrWorker.recognize(canvas);
-        let rawText = res.data.text.replace(/\s+/g, " "); // 無駄な改行や空白をスペース1つに統合
+        let rawText = res.data.text.replace(/\s+/g, ""); // すべての空白を詰める
 
-        // 【デバッグ用】画面にAIが読み取った全文字列をリアルタイムに強制表示
-        document.getElementById('log-raw-text').textContent = rawText ? rawText : "（文字が読み取れません）";
+        // 画面上のログに結果を出力
+        document.getElementById('log-raw-text').textContent = rawText ? rawText : "（文字認識の応答なし）";
 
-        // 「上げる」「下げる」等のゲーム終了フラグワード、もしくはルール単語が含まれているか確認
-        const hasRuleWord = rawText.includes("大") || rawText.includes("小") || rawText.includes("素") || rawText.includes("倍") || rawText.includes("上") || rawText.includes("下");
+        // ルール判定に使えるキーワードが含まれているか
+        const hasRule = rawText.includes("大") || rawText.includes("小") || rawText.includes("素") || rawText.includes("倍") || rawText.includes("上") || rawText.includes("下");
 
-        // テキスト全体から、数式や数値（例：「23」「15+4」「32/8」など）になり得るパーツをすべて抽出
-        let cleanTextForNums = rawText.replace(/×/g, '*').replace(/÷/g, '/');
-        let matches = cleanTextForNums.match(/([0-9\/*+\-]+)/g) || [];
-        
-        // フィルターをかけて、単なる1桁のゴミデータなどを除外（2桁以上の数値、または計算記号を含むもの）
+        // 数字・数式の抽出
+        let cleanTextNums = rawText.replace(/×/g, '*').replace(/÷/g, '/');
+        let matches = cleanTextNums.match(/([0-9\/*+\-]+)/g) || [];
         let validNumbers = matches.filter(n => n.length >= 1);
 
-        if (hasRuleWord && validNumbers.length >= 2) {
-          // 条件が揃ったらスキャンを自動停止してポーズ確定に移行
-          stopStreaming();
+        if (hasRule && validNumbers.length >= 2) {
+          stopStreaming(); // 条件が揃ったら自動停止して判定を確定
           
           let leftRaw = validNumbers[0];
           let rightRaw = validNumbers[1];
-          document.getElementById('log-extracted').textContent = `[ルール検出] / 左:${leftRaw} 右:${rightRaw}`;
+          document.getElementById('log-extracted').textContent = `判定確定（左:${leftRaw} 右:${rightRaw}）`;
           
           parseAndExecute(rawText, leftRaw, rightRaw);
         } else {
-          document.getElementById('log-extracted').textContent = `数式不足 (検出数: ${validNumbers.length}個)`;
+          document.getElementById('log-extracted').textContent = `条件不足 (数字件数: ${validNumbers.length}つ)`;
         }
-
       } catch (e) {
-        console.error("OCR処理エラー:", e);
+        console.error("OCRエラー:", e);
       }
     }
 
+    // 4. 判定ロジック
     function parseAndExecute(fullText, leftRaw, rightRaw) {
-      // 数式の計算処理 (eval)
       const solve = (str) => {
         try { return eval(str); } catch { return parseInt(str) || 0; }
       };
@@ -386,65 +250,44 @@
       let leftArm = 'down';
       let rightArm = 'down';
 
-      // 1. 大小ルールの判定
       if (fullText.includes("大") || fullText.includes("小") || fullText.includes("方")) {
         let leftIsBigger = leftVal > rightVal;
         let isSageru = fullText.includes("下") || fullText.includes("さげる");
         
         if (fullText.includes("小")) {
-          // 「小さい方」の場合
-          if (isSageru) {
-            leftArm = leftIsBigger ? 'up' : 'down';
-            rightArm = leftIsBigger ? 'down' : 'up';
-          } else {
-            leftArm = leftIsBigger ? 'down' : 'up';
-            rightArm = leftIsBigger ? 'up' : 'down';
-          }
+          if (isSageru) { leftArm = leftIsBigger ? 'up' : 'down'; rightArm = leftIsBigger ? 'down' : 'up'; }
+          else { leftArm = leftIsBigger ? 'down' : 'up'; rightArm = leftIsBigger ? 'up' : 'down'; }
         } else {
-          // 「大きい方」の場合（デフォルト）
-          if (isSageru) {
-            leftArm = leftIsBigger ? 'down' : 'up';
-            rightArm = leftIsBigger ? 'up' : 'down';
-          } else {
-            leftArm = leftIsBigger ? 'up' : 'down';
-            rightArm = leftIsBigger ? 'down' : 'up';
-          }
+          if (isSageru) { leftArm = leftIsBigger ? 'down' : 'up'; rightArm = leftIsBigger ? 'up' : 'down'; }
+          else { leftArm = leftIsBigger ? 'up' : 'down'; rightArm = leftIsBigger ? 'down' : 'up'; }
         }
       } 
-      // 2. 素数ルールの判定
       else if (fullText.includes("素数") || fullText.includes("素")) {
         let leftPrime = PRIMES.includes(leftVal);
         let rightPrime = PRIMES.includes(rightVal);
         if (fullText.includes("下") || fullText.includes("さげる")) {
-          leftArm = leftPrime ? 'down' : 'up';
-          rightArm = rightPrime ? 'down' : 'up';
+          leftArm = leftPrime ? 'down' : 'up'; rightArm = rightPrime ? 'down' : 'up';
         } else {
-          leftArm = leftPrime ? 'up' : 'down';
-          rightArm = rightPrime ? 'up' : 'down';
+          leftArm = leftPrime ? 'up' : 'down'; rightArm = rightPrime ? 'up' : 'down';
         }
       } 
-      // 3. 倍数ルールの判定
       else if (fullText.includes("倍数") || fullText.includes("倍")) {
-        let base = parseInt(fullText.match(/\d+/)) || 3; // 「3の倍数」なら3を取得、不検出ならデフォルト3
+        let base = parseInt(fullText.match(/\d+/)) || 3;
         let leftMult = (leftVal % base === 0);
         let rightMult = (rightVal % base === 0);
         if (fullText.includes("下") || fullText.includes("さげる")) {
-          leftArm = leftMult ? 'down' : 'up';
-          rightArm = rightMult ? 'down' : 'up';
+          leftArm = leftMult ? 'down' : 'up'; rightArm = rightMult ? 'down' : 'up';
         } else {
-          leftArm = leftMult ? 'up' : 'down';
-          rightArm = rightMult ? 'up' : 'down';
+          leftArm = leftMult ? 'up' : 'down'; rightArm = rightMult ? 'up' : 'down';
         }
       }
 
-      // 結果テキストの書き出し
-      let actionResultString = "";
-      if (leftArm === 'up' && rightArm === 'up') actionResultString = "【 両手上げ 】";
-      else if (leftArm === 'down' && rightArm === 'down') actionResultString = "【 両手下げ 】";
-      else if (leftArm === 'up') actionResultString = "【 左上げ / 右下げ 】";
-      else actionResultString = "【 左下げ / 右上げ 】";
+      let actionStr = "【 両手下げ 】";
+      if (leftArm === 'up' && rightArm === 'up') actionStr = "【 両手上げ 】";
+      else if (leftArm === 'up') actionStr = "【 左上げ / 右下げ 】";
+      else if (rightArm === 'up') actionStr = "【 左下げ / 右上げ 】";
 
-      document.getElementById('log-action').textContent = actionResultString;
+      document.getElementById('log-action').textContent = actionStr;
       moveStickman(leftArm, rightArm);
     }
 
@@ -453,30 +296,23 @@
       const r1 = document.getElementById('r-arm-1'); const r2 = document.getElementById('r-arm-2');
 
       if (left === 'up') {
-        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '32');
-        l2.setAttribute('x1', '35'); l2.setAttribute('y1', '32');
-        l2.setAttribute('x2', '25'); l2.setAttribute('y2', '12');
+        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '32'); l2.setAttribute('x1', '35'); l2.setAttribute('y1', '32'); l2.setAttribute('x2', '25'); l2.setAttribute('y2', '12');
         l1.classList.add('active-part'); l2.classList.add('active-part');
       } else {
-        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '58');
-        l2.setAttribute('x1', '35'); l2.setAttribute('y1', '58');
-        l2.setAttribute('x2', '25'); l2.setAttribute('y2', '72');
+        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '58'); l2.setAttribute('x1', '35'); l2.setAttribute('y1', '58'); l2.setAttribute('x2', '25'); l2.setAttribute('y2', '72');
         l1.classList.remove('active-part'); l2.classList.remove('active-part');
       }
 
       if (right === 'up') {
-        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '32');
-        r2.setAttribute('x1', '65'); r2.setAttribute('y1', '32');
-        r2.setAttribute('x2', '75'); r2.setAttribute('y2', '12');
+        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '32'); r2.setAttribute('x1', '65'); r2.setAttribute('y1', '32'); r2.setAttribute('x2', '75'); r2.setAttribute('y2', '12');
         r1.classList.add('active-part'); r2.classList.add('active-part');
       } else {
-        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '58');
-        r2.setAttribute('x1', '65'); r2.setAttribute('y1', '58');
-        r2.setAttribute('x2', '75'); r2.setAttribute('y2', '72');
+        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '58'); r2.setAttribute('x1', '65'); r2.setAttribute('y1', '58'); r2.setAttribute('x2', '75'); r2.setAttribute('y2', '72');
         r1.classList.remove('active-part'); r2.classList.remove('active-part');
       }
     }
 
+    // 初期化実行
     initCamera();
     initOCR();
   </script>
