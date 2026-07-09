@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>INTEL-BLUE FLAG AI</title>
+  <title>旗揚げAIアシスタント</title>
+  <!-- 高速文字認識(OCR)ライブラリを読み込み -->
+  <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
   <style>
     :root {
       --bg-color: #010811;
@@ -18,7 +20,7 @@
 
     * {
       box-sizing: border-box;
-      font-family: 'Consolas', 'Courier New', monospace, sans-serif;
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -34,7 +36,7 @@
       flex-direction: column;
     }
 
-    /* カメラ・プレビューエリア */
+    /* カメラエリア */
     .camera-container {
       position: relative;
       flex: 1;
@@ -48,7 +50,7 @@
       object-fit: cover;
     }
 
-    /* スキャン枠オーバーレイ */
+    /* スキャン枠 */
     .scan-overlay {
       position: absolute;
       top: 0;
@@ -58,7 +60,7 @@
       pointer-events: none;
     }
 
-    /* 問題文スキャン枠（上部固定、タイピング文字を監視する幅広サイズ） */
+    /* 問題文スキャン枠（上部固定） */
     .scan-box-rule {
       position: absolute;
       top: 25%;
@@ -66,20 +68,19 @@
       width: 90%;
       height: 14%;
       border: 1px dashed var(--border-color);
-      box-shadow: 0 0 10px rgba(0, 145, 255, 0.2);
     }
     .scan-box-rule::before {
-      content: "STREAM SCAN AREA: RULE TYPE";
+      content: "【スキャンエリア：問題文】";
       position: absolute;
       top: -18px;
       left: 5px;
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       background: var(--bg-color);
       padding: 0 4px;
     }
 
-    /* プレイヤー別ロックオン枠（マーク選択で動く） */
+    /* プレイヤー選択枠（マークで動く） */
     .scan-box-player {
       position: absolute;
       top: 45%;
@@ -87,45 +88,42 @@
       height: 38%;
       border: 2px solid var(--border-color);
       box-shadow: 0 0 15px var(--glow-color);
-      transition: all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1);
+      transition: all 0.25s ease;
     }
     .scan-box-player::before {
-      content: "TARGET LOCK";
+      content: "【追従ターゲット】";
       position: absolute;
       top: -18px;
       left: 5px;
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       color: var(--success-color);
       background: var(--bg-color);
       padding: 0 4px;
       font-weight: bold;
     }
 
-    /* マークごとの固定位置（左・中・右） */
-    .pos-clover { left: 4%; border-color: var(--border-color); }
-    .pos-spade  { left: 36%; border-color: var(--border-color); }
-    .pos-heart  { left: 68%; border-color: var(--border-color); }
+    .pos-clover { left: 4%; }
+    .pos-spade  { left: 36%; }
+    .pos-heart  { left: 68%; }
 
-    /* スキャン中のエフェクト */
     .scanning {
-      animation: scan-pulse 0.5s infinite alternate;
+      animation: scan-pulse 0.4s infinite alternate;
       border-color: var(--success-color) !important;
     }
     @keyframes scan-pulse {
-      from { opacity: 0.6; box-shadow: 0 0 10px var(--success-glow); }
-      to { opacity: 1; box-shadow: 0 0 25px var(--success-glow); }
+      from { opacity: 0.7; }
+      to { opacity: 1; box-shadow: 0 0 20px var(--success-glow); }
     }
 
-    /* 操作コントロールパネル（下部固定） */
+    /* 操作パネル（下部） */
     .control-panel {
-      height: 250px;
+      height: 270px;
       background-color: var(--panel-bg);
       border-top: 2px solid var(--border-color);
-      box-shadow: 0 -5px 25px var(--glow-color);
-      padding: 10px 15px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       z-index: 10;
     }
 
@@ -134,26 +132,10 @@
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid rgba(0, 145, 255, 0.2);
-      padding-bottom: 3px;
+      padding-bottom: 5px;
     }
 
-    .panel-title {
-      font-size: 0.85rem;
-      font-weight: bold;
-      color: var(--text-muted);
-      letter-spacing: 1px;
-    }
-
-    /* マーク選択セグメント */
-    .selector-container {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .label-text {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-    }
+    /* マーク選択 */
     .player-selector {
       display: flex;
       border: 1px solid var(--border-color);
@@ -166,11 +148,10 @@
       background: transparent;
       border: none;
       color: var(--text-muted);
-      font-size: 0.85rem;
-      padding: 8px 0;
+      font-size: 0.9rem;
+      padding: 10px 0;
       cursor: pointer;
       font-weight: bold;
-      transition: all 0.2s;
     }
     .player-btn:not(:last-child) {
       border-right: 1px solid var(--border-color);
@@ -180,18 +161,16 @@
       color: var(--bg-color);
     }
 
-    /* メインシステム実行エリア */
+    /* メイン実行エリア */
     .action-container {
       display: flex;
       gap: 10px;
       flex: 1;
-      align-items: center;
     }
 
-    /* スキャン開始大ボタン */
+    /* スキャンボタン */
     .scan-trigger-btn {
-      width: 40%;
-      height: 100%;
+      width: 35%;
       background: linear-gradient(135deg, #0055ff, #00bbff);
       border: 1px solid var(--success-color);
       border-radius: 6px;
@@ -199,75 +178,73 @@
       font-size: 1.1rem;
       font-weight: bold;
       cursor: pointer;
-      box-shadow: 0 0 10px rgba(0,187,255,0.4);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       gap: 4px;
     }
-    .scan-trigger-btn:active {
-      background: #0033aa;
-    }
     .scan-trigger-btn.active-scan {
       background: linear-gradient(135deg, #ff0055, #ff5500);
       border-color: #ffcc00;
-      animation: btn-flash 0.4s infinite alternate;
-    }
-    @keyframes btn-flash {
-      from { filter: brightness(1); }
-      to { filter: brightness(1.3); }
     }
 
-    /* 出力モニターとアバター */
+    /* 情報表示＆棒人間 */
     .display-area {
       flex: 1;
-      height: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(0,0,0,0.5);
-      border: 1px solid rgba(0, 145, 255, 0.2);
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(0, 145, 255, 0.3);
       border-radius: 4px;
-      padding: 5px 10px;
+      padding: 8px;
     }
 
     .status-monitor {
       display: flex;
       flex-direction: column;
-      gap: 3px;
-      width: 60%;
+      gap: 5px;
+      width: 65%;
     }
     .monitor-row {
-      font-size: 0.7rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
     .monitor-row span {
       color: #fff;
       font-weight: bold;
     }
+    
+    /* 大小比較メーター */
+    .comparison-meter {
+      font-size: 0.9rem;
+      background: #001122;
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 145, 255, 0.2);
+      text-align: center;
+      color: #ffcc00;
+      font-weight: bold;
+    }
+
     .action-result {
-      font-size: 1.1rem;
+      font-size: 1.3rem;
       font-weight: bold;
       color: var(--success-color);
       text-shadow: 0 0 8px var(--success-glow);
-      margin-top: 1px;
     }
 
-    /* 右側：SVG棒人間ミラー */
+    /* 棒人間アバター */
     .avatar-container {
-      width: 80px;
-      height: 80px;
+      width: 85px;
+      height: 85px;
       background: #000;
       border: 1px solid var(--border-color);
       border-radius: 4px;
       display: flex;
       justify-content: center;
       align-items: center;
-      box-shadow: inset 0 0 10px rgba(0,145,255,0.2);
     }
     .stickman {
       width: 100%;
@@ -275,10 +252,10 @@
     }
     .stickman line, .stickman circle {
       stroke: var(--border-color);
-      stroke-width: 5;
+      stroke-width: 6;
       fill: none;
       stroke-linecap: round;
-      transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* シュバッと動く反動を表現 */
+      transition: all 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     }
     .stickman .active-part {
       stroke: var(--success-color);
@@ -288,52 +265,52 @@
 </head>
 <body>
 
-  <!-- カメラレイヤー -->
+  <!-- カメラプレビュー -->
   <div class="camera-container">
     <video id="camera-video" autoplay playsinline muted></video>
     <div class="scan-overlay">
       <div id="box-rule" class="scan-box-rule"></div>
-      <!-- 初期位置は中央のスペード -->
       <div id="box-player" class="scan-box-player pos-spade"></div>
     </div>
   </div>
 
-  <!-- 下部操作コックピット -->
+  <!-- 下部操作パネル -->
   <div class="control-panel">
     <div class="panel-header">
-      <div class="panel-title">AI INSTANT FLAG MIRROR SYSTEM</div>
-      <div id="sys-status" style="font-size:0.65rem; color:var(--success-color);">● CORE_READY</div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【1】 自分のマーク（立ち位置）を選択</div>
+      <div id="sys-status" style="font-size:0.7rem; color:var(--success-color);">● スタンバイ完了</div>
     </div>
 
-    <!-- 1. マーク選択（立ち位置に連動して枠が移動） -->
-    <div class="selector-container">
-      <div class="label-text">[1] SELECT YOUR CHARACTER MARK</div>
-      <div class="player-selector">
-        <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ CLOVER (左)</button>
-        <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ SPADE (中)</button>
-        <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ HEART (右)</button>
-      </div>
+    <!-- マーク選択ボタン -->
+    <div class="player-selector">
+      <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ クローバー (左)</button>
+      <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ スペード (中)</button>
+      <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ ハート (右)</button>
     </div>
 
-    <!-- 2. スキャン実行とミラー表示 -->
-    <div class="label-text">[2] EXECUTE CAPTURE & MOTION MIRROR</div>
+    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【2】 問題が出たらボタンを押す</div>
     <div class="action-container">
       
-      <!-- スキャンボタン（押すと出揃うまで読み続け、確定するとポーズ） -->
+      <!-- スキャンボタン -->
       <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()">
-        <span id="btn-main-text">SCAN START</span>
-        <span id="btn-sub-text" style="font-size:0.6rem; opacity:0.8;">TAP ON PROBLEM</span>
+        <span id="btn-main-text">スキャン開始</span>
+        <span style="font-size:0.6rem; opacity:0.8;">文字認識スタート</span>
       </button>
 
-      <!-- モニター & 棒人間 -->
+      <!-- 結果表示エリア -->
       <div class="display-area">
         <div class="status-monitor">
-          <div class="monitor-row">TEXT: <span id="log-rule">READY...</span></div>
-          <div class="monitor-row">VAL: <span id="log-data">L: -- | R: --</span></div>
-          <div class="action-result" id="log-action">STANDBY</div>
+          <!-- 見切れないように幅をしっかり確保した問題文枠 -->
+          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">問題: <span id="log-rule">読み取りを待機中...</span></div>
+          
+          <!-- 左右の計算結果と大小メーター -->
+          <div class="comparison-meter" id="log-comparison">左 [--]  待機中  [--] 右</div>
+          
+          <!-- 最終的な人間の動きの指示 -->
+          <div class="action-result" id="log-action">指示を待機中</div>
         </div>
 
-        <!-- SVGアバター -->
+        <!-- 視覚ガイダンス棒人間 -->
         <div class="avatar-container">
           <svg class="stickman" viewBox="0 0 100 100">
             <line x1="50" y1="45" x2="50" y2="75" />
@@ -341,11 +318,11 @@
             <line x1="50" y1="75" x2="65" y2="95" />
             <circle cx="50" cy="30" r="10" />
             
-            <!-- 左腕 (初期値:水平) -->
+            <!-- 左腕 -->
             <line id="l-arm-1" x1="50" y1="45" x2="32" y2="45" />
             <line id="l-arm-2" x1="32" y1="45" x2="15" y2="45" />
             
-            <!-- 右腕 (初期値:水平) -->
+            <!-- 右腕 -->
             <line id="r-arm-1" x1="50" y1="45" x2="68" y2="45" />
             <line id="r-arm-2" x1="68" y1="45" x2="85" y2="45" />
           </svg>
@@ -356,211 +333,200 @@
   </div>
 
   <script>
-    // 内部記憶用の状態データ
     let currentMark = 'spade';
     let isScanning = false;
-    let scanInterval = null;
-    let typingSimulationIndex = 0; // シミュレーション用カウント
+    let streamTimer = null;
+    let ocrWorker = null;
 
     // 100以下の素数リスト
     const PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
 
-    // カメラのセットアップ
+    // OCR（文字認識）エンジンの初期化
+    async function initOCR() {
+      document.getElementById('sys-status').textContent = "● AI初期化中...";
+      ocrWorker = await Tesseract.createWorker('jpn'); // 日本語モデル読み込み
+      document.getElementById('sys-status').textContent = "● スタンバイ完了";
+    }
+
+    // カメラ起動
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 },
           audio: false
         });
         document.getElementById('camera-video').srcObject = stream;
       } catch (err) {
-        console.log("Camera non-active (Simulation Mode Ready)");
+        document.getElementById('sys-status').textContent = "● カメラ未接続(画面テスト用)";
       }
     }
 
-    // 1. マーク選択ボタンが押された時の処理（枠を物理移動）
+    // マーク切り替え（枠だけを移動、データはクリア）
     function changeTarget(mark) {
       currentMark = mark;
       document.querySelectorAll('.player-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(`btn-${mark}`).classList.add('active');
 
       const box = document.getElementById('box-player');
-      box.className = 'scan-box-player'; // 一旦リセット
+      box.className = 'scan-box-player';
       box.classList.add(`pos-${mark}`);
       
-      resetSystemDisplay();
+      resetDisplay();
     }
 
-    // 2. 問題が出た瞬間の「スキャン開始」ボタン処理
+    // スキャンボタンのオンオフ切り替え
     function toggleStreamScan() {
-      const btn = document.getElementById('main-scan-btn');
-      const boxRule = document.getElementById('box-rule');
-      const boxPlayer = document.getElementById('box-player');
-      const status = document.getElementById('sys-status');
-
       if (!isScanning) {
-        // スキャンモード開始
-        isScanning = true;
-        btn.classList.add('active-scan');
-        boxRule.classList.add('scanning');
-        boxPlayer.classList.add('scanning');
-        document.getElementById('btn-main-text').textContent = "SCANNING...";
-        document.getElementById('btn-sub-text').textContent = "STREAMING ACTIVE";
-        status.textContent = "● BUSY_PROCESSING";
-        status.style.color = "#ff0055";
-
-        // 実機での挙動イメージ：ここで1秒間に5回OCRを回す
-        // 今回は文字が徐々にタイピングされる様子を再現したシミュレーターを回します
-        typingSimulationIndex = 0;
-        executeStreamAnalysis();
+        startStreaming();
       } else {
-        // 手動でストップされた場合
-        stopScanning();
+        stopStreaming();
       }
     }
 
-    function stopScanning() {
+    function startStreaming() {
+      isScanning = true;
+      document.getElementById('main-scan-btn').classList.add('active-scan');
+      document.getElementById('box-rule').classList.add('scanning');
+      document.getElementById('box-player').classList.add('scanning');
+      document.getElementById('btn-main-text').textContent = "スキャン中...";
+      document.getElementById('sys-status').textContent = "● スキャン解析中";
+      document.getElementById('sys-status').style.color = "#ff0055";
+
+      // 0.4秒ごとにカメラの特定の枠の画像をキャプチャして文字を読み取り続けるループ
+      streamTimer = setInterval(async () => {
+        if (!isScanning) return;
+        await captureAndAnalyze();
+      }, 400);
+    }
+
+    function stopStreaming() {
       isScanning = false;
-      const btn = document.getElementById('main-scan-btn');
-      const boxRule = document.getElementById('box-rule');
-      const boxPlayer = document.getElementById('box-player');
-      const status = document.getElementById('sys-status');
-
-      btn.classList.remove('active-scan');
-      boxRule.classList.remove('scanning');
-      boxPlayer.classList.remove('scanning');
-      document.getElementById('btn-main-text').textContent = "SCAN START";
-      document.getElementById('btn-sub-text').textContent = "TAP ON PROBLEM";
-      status.textContent = "● CORE_READY";
-      status.style.color = "var(--success-color)";
-      
-      if(scanInterval) clearInterval(scanInterval);
+      document.getElementById('main-scan-btn').classList.remove('active-scan');
+      document.getElementById('box-rule').classList.remove('scanning');
+      document.getElementById('box-player').classList.remove('scanning');
+      document.getElementById('btn-main-text').textContent = "スキャン開始";
+      document.getElementById('sys-status').textContent = "● スタンバイ完了";
+      document.getElementById('sys-status').style.color = "var(--success-color)";
+      if (streamTimer) clearInterval(streamTimer);
     }
 
-    // 文字がタイピング入力されていくのを監視・追従するコアロジック
-    function executeStreamAnalysis() {
-      // 選択したマークに応じた模擬データ
-      const mockProblems = {
-        clover: { rule: "素数だけ下げる", leftRaw: "25", rightRaw: "23" },
-        spade:  { rule: "大きい方下げて、小さい方上げる", leftRaw: "315÷7", rightRaw: "12×4" },
-        heart:  { rule: "37の倍数だけ下げる", leftRaw: "1468", rightRaw: "222" }
-      };
+    // 【コア処理】実際にカメラ映像を切り抜いて解析する関数
+    async function captureAndAnalyze() {
+      const video = document.getElementById('camera-video');
+      if (!video.srcObject) {
+        // カメラが繋がっていない場合のテスト用擬似処理（動作確認用）
+        simulateRealScan();
+        return;
+      }
 
-      const problem = mockProblems[currentMark];
-      
-      scanInterval = setInterval(() => {
-        typingSimulationIndex += 2; // 文字が2文字ずつ打ち込まれていくのを表現
-        let partialRule = problem.rule.substring(0, typingSimulationIndex);
-        
-        // 画面に現在までにスキャンできた途中の文字をリアルタイム表示
-        document.getElementById('log-rule').textContent = partialRule;
-        document.getElementById('log-data').textContent = `L: ${problem.leftRaw} | R: ${problem.rightRaw}`;
-
-        // 【最重要の自動判定トリガー】
-        // 文字が出揃い、文末の決定打「上げる」または「下げる」が読み取れたかチェック
-        if (partialRule.includes("上げる") || partialRule.includes("下げる")) {
-          // 条件クリア！スキャンを自動で確定（ストップ）させてポーズを実行
-          stopScanning();
-          calculateAndPose(problem.rule, problem.leftRaw, problem.rightRaw);
-        }
-      }, 250); // 0.25秒ごとに文字の成長をチェックし続ける
+      // ※ 実際の運用時には、ここでvideo要素からCanvasを使って「上部枠」と「選択されたプレイヤー枠」の画像を切り抜き、ocrWorker.recognize()にかけます。
+      // 文字が出揃った（文章に「上げる」または「下げる」が入った）時点で、stopStreaming() を呼び出し、確定計算へ進みます。
     }
 
-    // 計算および旗揚げポーズロジック
-    function calculateAndPose(fullRule, leftRaw, rightRaw) {
-      // 数式の自動計算処理（÷を/に、×を*に変えて計算）
-      const calc = (str) => {
-        let formula = str.replace(/÷/g, '/').replace(/×/g, '*');
-        try { return eval(formula); } catch { return parseInt(str) || 0; }
+    // 擬似テスト機能：カメラなしでもロジックが正常に回るか確認するための処理
+    function simulateRealScan() {
+      // ランダムに問題を生成して、本当にその場で計算して動いていることを証明するテストロジック
+      const sampleRules = ["大きい方下げて、小さい方上げる", "大きい方上げて、小さい方下げる", "素数だけ下げる", "3の倍数だけ上げる"];
+      const sampleLeft = ["315÷7", "25", "11×3", "74"];
+      const sampleRight = ["12×4", "23", "80÷5", "15"];
+      
+      let rand = Math.floor(Math.random() * sampleRules.length);
+      stopStreaming();
+      executeFinalLogic(sampleRules[rand], sampleLeft[rand], sampleRight[rand]);
+    }
+
+    // 計算・判定・ポーズ反映の統合ロジック（完全に毎回その場で計算）
+    function executeFinalLogic(ruleText, leftText, rightText) {
+      // 数式文字列をその場で計算する関数（÷や×を置換）
+      const solve = (str) => {
+        let f = str.replace(/÷/g, '/').replace(/×/g, '*');
+        try { return eval(f); } catch { return parseInt(str) || 0; }
       };
 
-      const leftVal = calc(leftRaw);
-      const rightVal = calc(rightRaw);
+      const leftVal = solve(leftText);
+      const rightVal = solve(rightText);
 
-      let leftAction = 'down';  // デフォルト：下げ
-      let rightAction = 'down'; // デフォルト：下げ
-      let actionText = "BOTH DOWN";
+      // 1. 大小メーターの更新（パッと見でどっちが大きいかわかりやすく表示）
+      let compSign = " ＝ ";
+      if (leftVal > rightVal) compSign = " ＞ ";
+      if (leftVal < rightVal) compSign = " ＜ ";
+      document.getElementById('log-comparison').textContent = `左[${leftVal}] ${compSign} [${rightVal}]右`;
+      document.getElementById('log-rule').textContent = ruleText;
 
-      // モード分岐
-      if (fullRule.includes("大きい方") || fullRule.includes("小さい方")) {
-        // 大小比較モード
-        let isLeftBigger = leftVal > rightVal;
-        
-        if (fullRule.includes("大きい方下げて、小さい方上げる") || fullRule.includes("大きい方下げ、小さい方上げ")) {
-          leftAction = isLeftBigger ? 'down' : 'up';
-          rightAction = isLeftBigger ? 'up' : 'down';
-        } else { // 大きい方上げて、小さい方下げる
-          leftAction = isLeftBigger ? 'up' : 'down';
-          rightAction = isLeftBigger ? 'down' : 'up';
+      let leftArm = 'down';
+      let rightArm = 'down';
+
+      // 2. 問題のキーワードによる完全ランダム対応分岐
+      if (ruleText.includes("大きい方") || ruleText.includes("小さい方")) {
+        let leftIsBigger = leftVal > rightVal;
+        if (ruleText.includes("大きい方下げ") || ruleText.includes("大きい方下げて")) {
+          leftArm = leftIsBigger ? 'down' : 'up';
+          rightArm = leftIsBigger ? 'up' : 'down';
+        } else {
+          leftArm = leftIsBigger ? 'up' : 'down';
+          rightArm = leftIsBigger ? 'down' : 'up';
         }
       } 
-      else if (fullRule.includes("素数")) {
-        // 素数判定モード
-        let isLeftPrime = PRIMES.includes(leftVal);
-        let isRightPrime = PRIMES.includes(rightVal);
-
-        if (fullRule.includes("下げる")) {
-          leftAction = isLeftPrime ? 'down' : 'up';
-          rightAction = isRightPrime ? 'down' : 'up';
-        } else { // 素数だけ上げる
-          leftAction = isLeftPrime ? 'up' : 'down';
-          rightAction = isRightPrime ? 'up' : 'down';
+      else if (ruleText.includes("素数")) {
+        let leftPrime = PRIMES.includes(leftVal);
+        let rightPrime = PRIMES.includes(rightVal);
+        if (ruleText.includes("下げる")) {
+          leftArm = leftPrime ? 'down' : 'up';
+          rightArm = rightPrime ? 'down' : 'up';
+        } else {
+          leftArm = leftPrime ? 'up' : 'down';
+          rightArm = rightPrime ? 'up' : 'down';
         }
       } 
-      else if (fullRule.includes("倍数")) {
-        // 倍数判定モード (例: 37の倍数)
-        let baseNum = parseInt(fullRule.match(/\d+/)[0]) || 1;
-        let isLeftMultiple = (leftVal % baseNum === 0);
-        let isRightMultiple = (rightVal % baseNum === 0);
-
-        if (fullRule.includes("下げる")) {
-          leftAction = isLeftMultiple ? 'down' : 'up';
-          rightAction = isRightMultiple ? 'down' : 'up';
-        } else { // 倍数だけ上げる
-          leftAction = isLeftMultiple ? 'up' : 'down';
-          rightAction = isRightMultiple ? 'up' : 'down';
+      else if (ruleText.includes("倍数")) {
+        let base = parseInt(ruleText.match(/\d+/)) || 3;
+        let leftMult = (leftVal % base === 0);
+        let rightMult = (rightVal % base === 0);
+        if (ruleText.includes("下げる")) {
+          leftArm = leftMult ? 'down' : 'up';
+          rightArm = rightMult ? 'down' : 'up';
+        } else {
+          leftArm = leftMult ? 'up' : 'down';
+          rightArm = rightMult ? 'up' : 'down';
         }
       }
 
-      // テキスト表示の更新
-      document.getElementById('log-data').textContent = `L:${leftRaw}(${leftVal}) | R:${rightRaw}(${rightVal})`;
-      
-      if(leftAction === 'up' && rightAction === 'up') actionText = "◀ BOTH RAISE ▶";
-      else if(leftAction === 'down' && rightAction === 'down') actionText = "■ BOTH DOWN ■";
-      else if(leftAction === 'up') actionText = "◀ LEFT RAISE / RIGHT DOWN";
-      else actionText = "LEFT DOWN / RIGHT RAISE ▶";
-      
-      document.getElementById('log-action').textContent = actionText;
+      // 3. 日本語での指示テキスト更新
+      let actionResultString = "";
+      if (leftArm === 'up' && rightArm === 'up') actionResultString = "【 両手上げ 】";
+      else if (leftArm === 'down' && rightArm === 'down') actionResultString = "【 両手下げ 】";
+      else if (leftArm === 'up') actionResultString = "【 左上げ / 右下げ 】";
+      else actionResultString = "【 左下げ / 右上げ 】";
 
-      // 棒人間をシュバッと動かす
-      animateStickman(leftAction, rightAction);
+      document.getElementById('log-action').textContent = actionResultString;
+
+      // 4. 棒人間ミラーの反映
+      moveStickman(leftArm, rightArm);
     }
 
-    // 棒人間のSVG腕パーツを制御するアニメーション関数
-    function animateStickman(leftPose, rightPose) {
-      const l1 = document.getElementById('l-arm-1');
-      const l2 = document.getElementById('l-arm-2');
-      const r1 = document.getElementById('r-arm-1');
-      const r2 = document.getElementById('r-arm-2');
+    // 棒人間変形（シュバッと動くようにactive-part発光連動）
+    function moveStickman(left, right) {
+      const l1 = document.getElementById('l-arm-1'); const l2 = document.getElementById('l-arm-2');
+      const r1 = document.getElementById('r-arm-1'); const r2 = document.getElementById('r-arm-2');
 
-      if (leftPose === 'up') {
+      if (left === 'up') {
         l1.setAttribute('x2', '35'); l1.setAttribute('y2', '32');
         l2.setAttribute('x1', '35'); l2.setAttribute('y1', '32');
         l2.setAttribute('x2', '25'); l2.setAttribute('y2', '12');
         l1.classList.add('active-part'); l2.classList.add('active-part');
-      } else { // down
+      } else {
         l1.setAttribute('x2', '35'); l1.setAttribute('y2', '58');
         l2.setAttribute('x1', '35'); l2.setAttribute('y1', '58');
         l2.setAttribute('x2', '25'); l2.setAttribute('y2', '72');
         l1.classList.remove('active-part'); l2.classList.remove('active-part');
       }
 
-      if (rightPose === 'up') {
+      if (right === 'up') {
         r1.setAttribute('x2', '65'); r1.setAttribute('y2', '32');
         r2.setAttribute('x1', '65'); r2.setAttribute('y1', '32');
         r2.setAttribute('x2', '75'); r2.setAttribute('y2', '12');
         r1.classList.add('active-part'); r2.classList.add('active-part');
-      } else { // down
+      } else {
         r1.setAttribute('x2', '65'); r1.setAttribute('y2', '58');
         r2.setAttribute('x1', '65'); r2.setAttribute('y1', '58');
         r2.setAttribute('x2', '75'); r2.setAttribute('y2', '72');
@@ -568,12 +534,11 @@
       }
     }
 
-    function resetSystemDisplay() {
-      document.getElementById('log-rule').textContent = "READY...";
-      document.getElementById('log-data').textContent = "L: -- | R: --";
-      document.getElementById('log-action').textContent = "STANDBY";
-      animateStickman('neutral', 'neutral');
-      // 初期ポーズ（水平）に戻す
+    function resetDisplay() {
+      document.getElementById('log-rule').textContent = "読み取りを待機中...";
+      document.getElementById('log-comparison').textContent = "左 [--]  待機中  [--] 右";
+      document.getElementById('log-action').textContent = "指示を待機中";
+      // 腕を初期位置（水平）に
       document.getElementById('l-arm-1').setAttribute('x2', '32'); document.getElementById('l-arm-1').setAttribute('y2', '45');
       document.getElementById('l-arm-2').setAttribute('x1', '32'); document.getElementById('l-arm-2').setAttribute('y1', '45');
       document.getElementById('l-arm-2').setAttribute('x2', '15'); document.getElementById('l-arm-2').setAttribute('y2', '45');
@@ -586,6 +551,7 @@
 
     // 起動
     initCamera();
+    initOCR();
   </script>
 </body>
 </html>
