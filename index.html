@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>旗揚げAIアシスタント（完全版）</title>
+  <title>旗揚げAIアシスタント（認識強化版）</title>
   <!-- 文字認識ライブラリ -->
   <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
   <style>
@@ -117,7 +117,7 @@
 
     /* 操作パネル */
     .control-panel {
-      height: 270px;
+      height: 290px;
       background-color: var(--panel-bg);
       border-top: 2px solid var(--border-color);
       padding: 12px;
@@ -207,7 +207,7 @@
       width: 65%;
     }
     .monitor-row {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       color: var(--text-muted);
     }
     .monitor-row span {
@@ -259,7 +259,7 @@
       stroke: var(--success-color);
     }
 
-    /* 非表示の画像切り出し用キャンバス */
+    /* 非表示の画像処理用キャンバス */
     #hidden-canvas {
       display: none;
     }
@@ -277,17 +277,17 @@
 
   <div class="control-panel">
     <div class="panel-header">
-      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【1】 自分のマークを選択（枠が動きます）</div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【1】 自分のマークを選択</div>
       <div id="sys-status" style="font-size:0.7rem; color:var(--success-color);">● 起動中...</div>
     </div>
 
     <div class="player-selector">
-      <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ クローバー (左)</button>
-      <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ スペード (中)</button>
-      <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ ハート (右)</button>
+      <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ 左(クローバー)</button>
+      <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ 中(スペード)</button>
+      <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ 右(ハート)</button>
     </div>
 
-    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【2】 問題の静止画や画面に向けて押す</div>
+    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【2】 スキャン開始ボタン</div>
     <div class="action-container">
       
       <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()">
@@ -297,7 +297,9 @@
 
       <div class="display-area">
         <div class="status-monitor">
-          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">問題: <span id="log-rule">待機中...</span></div>
+          <!-- 生データデバッグ用に表示枠を拡張 -->
+          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">問題生データ: <span id="log-rule" style="color: #ff5500;">待機中...</span></div>
+          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">数字生データ: <span id="log-raw-num" style="color: #00ffcc;">待機中...</span></div>
           <div class="comparison-meter" id="log-comparison">左 [--]  待機中  [--] 右</div>
           <div class="action-result" id="log-action">ポーズ待機</div>
         </div>
@@ -326,14 +328,15 @@
     let isScanning = false;
     let streamTimer = null;
     let ocrWorker = null;
-    let accumulatedText = ""; // 読み取った文字を溜める場所
+    let accumulatedText = ""; 
 
     const PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
 
     async function initOCR() {
       document.getElementById('sys-status').textContent = "● AI準備中...";
       ocrWorker = await Tesseract.createWorker('jpn');
-      // 数字と特定の漢字だけを狙い撃ちして認識精度を爆上げする設定
+      
+      // 暗い背景での文字化けを防ぐため、認識対象の文字を究極まで絞り込む
       await ocrWorker.setParameters({
         tessedit_char_whitelist: '0123456789０１２３４５６７８９倍数素数大きい小さい方上げて下げるけ倍大中小分×÷+-*/= '
       });
@@ -348,7 +351,7 @@
         });
         document.getElementById('camera-video').srcObject = stream;
       } catch (err) {
-        document.getElementById('sys-status').textContent = "● カメラ起動エラー";
+        document.getElementById('sys-status').textContent = "● カメラ未起動(静止画をカメラで映してください)";
       }
     }
 
@@ -380,7 +383,6 @@
       document.getElementById('btn-main-text').textContent = "解析中...";
       document.getElementById('sys-status').textContent = "● 映像スキャン中...";
 
-      // 0.3秒おきにカメラ枠の画像をパシャパシャ切り抜いてOCRにかけるループ
       streamTimer = setInterval(async () => {
         if (!isScanning) return;
         await captureAndAnalyze();
@@ -397,7 +399,22 @@
       if (streamTimer) clearInterval(streamTimer);
     }
 
-    // 【修正核心部】カメラ映像から枠の部分だけを正確に切り抜いて文字認識させる処理
+    // 画像処理（二値化・反転）で認識率を無理やりブーストする関数
+    function preprocessImage(ctx, w, h) {
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        // 輝度（明るさ）を計算
+        let brightness = 0.34 * data[i] + 0.5 * data[i + 1] + 0.16 * data[i + 2];
+        // モニターの「暗い背景に白い文字」を「白い背景に黒い文字」へ反転＆くっきり化
+        let color = brightness > 120 ? 0 : 255; 
+        data[i] = color;     // R
+        data[i + 1] = color; // G
+        data[i + 2] = color; // B
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
     async function captureAndAnalyze() {
       const video = document.getElementById('camera-video');
       if (!video.srcObject || video.readyState < 2) return;
@@ -405,21 +422,22 @@
       const canvas = document.getElementById('hidden-canvas');
       const ctx = canvas.getContext('2d');
       
-      // カメラの実際の解像度を取得
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // 1. 上部「問題文枠」の座標計算と切り抜き (CSSの％比率に合わせる)
+      // 1. 問題文エリアの切り抜き
       const ruleX = canvas.width * 0.05;
       const ruleY = canvas.height * 0.22;
       const ruleW = canvas.width * 0.90;
       const ruleH = canvas.height * 0.15;
 
       ctx.drawImage(video, ruleX, ruleY, ruleW, ruleH, 0, 0, ruleW, ruleH);
-      const ruleImgData = ctx.getImageData(0, 0, ruleW, ruleH);
-      
-      // 2. 選択されたマーク（プレイヤー枠）の座標計算と切り抜き
-      let pLeftPercent = 0.36; // デフォルト中央
+      preprocessImage(ctx, ruleW, ruleH); // 画像くっきり化処理
+      const ruleRes = await ocrWorker.recognize(canvas);
+      let detectedRule = ruleRes.data.text.replace(/\s+/g, ""); 
+
+      // 2. 数値エリアの切り抜き
+      let pLeftPercent = 0.36; 
       if (currentMark === 'clover') pLeftPercent = 0.04;
       if (currentMark === 'heart') pLeftPercent = 0.68;
 
@@ -429,41 +447,27 @@
       const playerH = canvas.height * 0.40;
 
       ctx.drawImage(video, playerX, playerY, playerW, playerH, 0, 0, playerW, playerH);
-      const playerImgData = ctx.getImageData(0, 0, playerW, playerH);
+      preprocessImage(ctx, playerW, playerH); // 画像くっきり化処理
+      const playerRes = await ocrWorker.recognize(canvas);
+      let detectedNumbers = playerRes.data.text.replace(/\s+/g, " ");
 
-      // OCRエンジンで画像から文字を読み取る
-      try {
-        // 問題文枠の解析
-        ctx.putImageData(ruleImgData, 0, 0);
-        const ruleRes = await ocrWorker.recognize(canvas);
-        let detectedRule = ruleRes.data.text.replace(/\s+/g, ""); // 空白除去
+      // 【デバッグ表示】AIが今読み取った「生データ」をそのまま画面に出す
+      document.getElementById('log-rule').textContent = detectedRule ? detectedRule : "（文字を検出できません）";
+      document.getElementById('log-raw-num').textContent = detectedNumbers ? detectedNumbers : "（数字を検出できません）";
 
-        // プレイヤー枠（数字）の解析
-        ctx.putImageData(playerImgData, 0, 0);
-        const playerRes = await ocrWorker.recognize(canvas);
-        let detectedNumbers = playerRes.data.text.replace(/\s+/g, " "); // 数字はスペース区切りに
+      if (detectedRule) {
+        accumulatedText += detectedRule;
+      }
 
-        if (detectedRule) {
-          accumulatedText += detectedRule;
-          document.getElementById('log-rule').textContent = accumulatedText;
-        }
-
-        // 静止画（一瞬で文字がある）でもタイピング（徐々に増える）でも、
-        // 「上げる」か「下げる」のキーワードが入ったら即判定に回す！
-        if (accumulatedText.includes("上げる") || accumulatedText.includes("下げる")) {
-          stopStreaming();
-          parseAndExecute(accumulatedText, detectedNumbers);
-        }
-      } catch (e) {
-        console.error("OCRエラー:", e);
+      // 「上げる」か「下げる」が引っかかったら、文字化けがあっても強制的に判定へ進む
+      if (accumulatedText.includes("上げる") || accumulatedText.includes("下げる") || accumulatedText.includes("上") || accumulatedText.includes("下")) {
+        stopStreaming();
+        parseAndExecute(accumulatedText, detectedNumbers);
       }
     }
 
-    // 文字列から「左の数式」「右の数式」を取り出して計算し、ポーズを決定する処理
     function parseAndExecute(fullRule, rawNumbers) {
-      // 読み取った文字列から数字や数式（例: 315÷7 や 23）を2つ抽出する
-      // 全角の計算記号を半角に直す
-      let cleanNums = rawNumbers.replace(/×/g, '*').replace(/÷/g, '/').replace(/：/g, ':');
+      let cleanNums = rawNumbers.replace(/×/g, '*').replace(/÷/g, '/');
       let matches = cleanNums.match(/([0-9\/*+\-]+)/g) || [];
 
       let leftRaw = matches[0] || "0";
@@ -476,7 +480,6 @@
       const leftVal = Math.round(solve(leftRaw));
       const rightVal = Math.round(solve(rightRaw));
 
-      // 大小不等号メーター表示
       let compSign = " ＝ ";
       if (leftVal > rightVal) compSign = " ＞ ";
       if (leftVal < rightVal) compSign = " ＜ ";
@@ -485,10 +488,10 @@
       let leftArm = 'down';
       let rightArm = 'down';
 
-      // ルール判定
-      if (fullRule.includes("大きい方") || fullRule.includes("小さい方")) {
+      // 判定処理（多少の文字化けでも引っかかるように単語をケア）
+      if (fullRule.includes("大") || fullRule.includes("小")) {
         let leftIsBigger = leftVal > rightVal;
-        if (fullRule.includes("大きい方下げ")) {
+        if (fullRule.includes("下") || fullRule.includes("さげる")) {
           leftArm = leftIsBigger ? 'down' : 'up';
           rightArm = leftIsBigger ? 'up' : 'down';
         } else {
@@ -496,10 +499,10 @@
           rightArm = leftIsBigger ? 'down' : 'up';
         }
       } 
-      else if (fullRule.includes("素数")) {
+      else if (fullRule.includes("素数") || fullRule.includes("素")) {
         let leftPrime = PRIMES.includes(leftVal);
         let rightPrime = PRIMES.includes(rightVal);
-        if (fullRule.includes("下げる")) {
+        if (fullRule.includes("下") || fullRule.includes("さげる")) {
           leftArm = leftPrime ? 'down' : 'up';
           rightArm = rightPrime ? 'down' : 'up';
         } else {
@@ -507,11 +510,11 @@
           rightArm = rightPrime ? 'up' : 'down';
         }
       } 
-      else if (fullRule.includes("倍数")) {
+      else if (fullRule.includes("倍数") || fullRule.includes("倍")) {
         let base = parseInt(fullRule.match(/\d+/)) || 3;
         let leftMult = (leftVal % base === 0);
         let rightMult = (rightVal % base === 0);
-        if (fullRule.includes("下げる")) {
+        if (fullRule.includes("下") || fullRule.includes("さげる")) {
           leftArm = leftMult ? 'down' : 'up';
           rightArm = rightMult ? 'down' : 'up';
         } else {
@@ -520,7 +523,6 @@
         }
       }
 
-      // 日本語での指示
       let actionResultString = "";
       if (leftArm === 'up' && rightArm === 'up') actionResultString = "【 両手上げ 】";
       else if (leftArm === 'down' && rightArm === 'down') actionResultString = "【 両手下げ 】";
@@ -562,6 +564,7 @@
 
     function resetDisplay() {
       document.getElementById('log-rule').textContent = "待機中...";
+      document.getElementById('log-raw-num').textContent = "待機中...";
       document.getElementById('log-comparison').textContent = "左 [--]  待機中  [--] 右";
       document.getElementById('log-action').textContent = "ポーズ待機";
       moveStickman('down', 'down');
