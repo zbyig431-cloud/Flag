@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>旗揚げAIアシスタント</title>
-  <!-- 高速文字認識(OCR)ライブラリを読み込み -->
+  <title>旗揚げAIアシスタント（完全版）</title>
+  <!-- 文字認識ライブラリ -->
   <script src="https://unpkg.com/tesseract.js@v4.0.1/dist/tesseract.min.js"></script>
   <style>
     :root {
@@ -20,7 +20,7 @@
 
     * {
       box-sizing: border-box;
-      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+      font-family: Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -50,7 +50,7 @@
       object-fit: cover;
     }
 
-    /* スキャン枠 */
+    /* スキャン枠のオーバーレイ */
     .scan-overlay {
       position: absolute;
       top: 0;
@@ -63,14 +63,14 @@
     /* 問題文スキャン枠（上部固定） */
     .scan-box-rule {
       position: absolute;
-      top: 25%;
+      top: 22%;
       left: 5%;
       width: 90%;
-      height: 14%;
-      border: 1px dashed var(--border-color);
+      height: 15%;
+      border: 2px dashed var(--border-color);
     }
     .scan-box-rule::before {
-      content: "【スキャンエリア：問題文】";
+      content: "【問題文の枠】";
       position: absolute;
       top: -18px;
       left: 5px;
@@ -80,18 +80,18 @@
       padding: 0 4px;
     }
 
-    /* プレイヤー選択枠（マークで動く） */
+    /* プレイヤー数値スキャン枠（マーク選択で動く） */
     .scan-box-player {
       position: absolute;
-      top: 45%;
+      top: 42%;
       width: 28%;
-      height: 38%;
+      height: 40%;
       border: 2px solid var(--border-color);
       box-shadow: 0 0 15px var(--glow-color);
-      transition: all 0.25s ease;
+      transition: left 0.2s ease;
     }
     .scan-box-player::before {
-      content: "【追従ターゲット】";
+      content: "【数値・棒人間の枠】";
       position: absolute;
       top: -18px;
       left: 5px;
@@ -99,9 +99,9 @@
       color: var(--success-color);
       background: var(--bg-color);
       padding: 0 4px;
-      font-weight: bold;
     }
 
+    /* 位置の指定 */
     .pos-clover { left: 4%; }
     .pos-spade  { left: 36%; }
     .pos-heart  { left: 68%; }
@@ -111,11 +111,11 @@
       border-color: var(--success-color) !important;
     }
     @keyframes scan-pulse {
-      from { opacity: 0.7; }
+      from { opacity: 0.6; }
       to { opacity: 1; box-shadow: 0 0 20px var(--success-glow); }
     }
 
-    /* 操作パネル（下部） */
+    /* 操作パネル */
     .control-panel {
       height: 270px;
       background-color: var(--panel-bg);
@@ -161,7 +161,6 @@
       color: var(--bg-color);
     }
 
-    /* メイン実行エリア */
     .action-container {
       display: flex;
       gap: 10px;
@@ -189,7 +188,7 @@
       border-color: #ffcc00;
     }
 
-    /* 情報表示＆棒人間 */
+    /* 画面モニター */
     .display-area {
       flex: 1;
       display: flex;
@@ -216,7 +215,6 @@
       font-weight: bold;
     }
     
-    /* 大小比較メーター */
     .comparison-meter {
       font-size: 0.9rem;
       background: #001122;
@@ -259,13 +257,16 @@
     }
     .stickman .active-part {
       stroke: var(--success-color);
-      filter: drop-shadow(0px 0px 4px var(--success-color));
+    }
+
+    /* 非表示の画像切り出し用キャンバス */
+    #hidden-canvas {
+      display: none;
     }
   </style>
 </head>
 <body>
 
-  <!-- カメラプレビュー -->
   <div class="camera-container">
     <video id="camera-video" autoplay playsinline muted></video>
     <div class="scan-overlay">
@@ -274,55 +275,41 @@
     </div>
   </div>
 
-  <!-- 下部操作パネル -->
   <div class="control-panel">
     <div class="panel-header">
-      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【1】 自分のマーク（立ち位置）を選択</div>
-      <div id="sys-status" style="font-size:0.7rem; color:var(--success-color);">● スタンバイ完了</div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【1】 自分のマークを選択（枠が動きます）</div>
+      <div id="sys-status" style="font-size:0.7rem; color:var(--success-color);">● 起動中...</div>
     </div>
 
-    <!-- マーク選択ボタン -->
     <div class="player-selector">
       <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ クローバー (左)</button>
       <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ スペード (中)</button>
       <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ ハート (右)</button>
     </div>
 
-    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【2】 問題が出たらボタンを押す</div>
+    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: bold;">【2】 問題の静止画や画面に向けて押す</div>
     <div class="action-container">
       
-      <!-- スキャンボタン -->
       <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()">
         <span id="btn-main-text">スキャン開始</span>
-        <span style="font-size:0.6rem; opacity:0.8;">文字認識スタート</span>
+        <span style="font-size:0.6rem; opacity:0.8;">読み取りスタート</span>
       </button>
 
-      <!-- 結果表示エリア -->
       <div class="display-area">
         <div class="status-monitor">
-          <!-- 見切れないように幅をしっかり確保した問題文枠 -->
-          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">問題: <span id="log-rule">読み取りを待機中...</span></div>
-          
-          <!-- 左右の計算結果と大小メーター -->
+          <div class="monitor-row" style="white-space: normal; line-height: 1.2;">問題: <span id="log-rule">待機中...</span></div>
           <div class="comparison-meter" id="log-comparison">左 [--]  待機中  [--] 右</div>
-          
-          <!-- 最終的な人間の動きの指示 -->
-          <div class="action-result" id="log-action">指示を待機中</div>
+          <div class="action-result" id="log-action">ポーズ待機</div>
         </div>
 
-        <!-- 視覚ガイダンス棒人間 -->
         <div class="avatar-container">
           <svg class="stickman" viewBox="0 0 100 100">
             <line x1="50" y1="45" x2="50" y2="75" />
             <line x1="50" y1="75" x2="35" y2="95" />
             <line x1="50" y1="75" x2="65" y2="95" />
             <circle cx="50" cy="30" r="10" />
-            
-            <!-- 左腕 -->
             <line id="l-arm-1" x1="50" y1="45" x2="32" y2="45" />
             <line id="l-arm-2" x1="32" y1="45" x2="15" y2="45" />
-            
-            <!-- 右腕 -->
             <line id="r-arm-1" x1="50" y1="45" x2="68" y2="45" />
             <line id="r-arm-2" x1="68" y1="45" x2="85" y2="45" />
           </svg>
@@ -332,23 +319,27 @@
     </div>
   </div>
 
+  <canvas id="hidden-canvas"></canvas>
+
   <script>
     let currentMark = 'spade';
     let isScanning = false;
     let streamTimer = null;
     let ocrWorker = null;
+    let accumulatedText = ""; // 読み取った文字を溜める場所
 
-    // 100以下の素数リスト
     const PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
 
-    // OCR（文字認識）エンジンの初期化
     async function initOCR() {
-      document.getElementById('sys-status').textContent = "● AI初期化中...";
-      ocrWorker = await Tesseract.createWorker('jpn'); // 日本語モデル読み込み
+      document.getElementById('sys-status').textContent = "● AI準備中...";
+      ocrWorker = await Tesseract.createWorker('jpn');
+      // 数字と特定の漢字だけを狙い撃ちして認識精度を爆上げする設定
+      await ocrWorker.setParameters({
+        tessedit_char_whitelist: '0123456789０１２３４５６７８９倍数素数大きい小さい方上げて下げるけ倍大中小分×÷+-*/= '
+      });
       document.getElementById('sys-status').textContent = "● スタンバイ完了";
     }
 
-    // カメラ起動
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -357,11 +348,10 @@
         });
         document.getElementById('camera-video').srcObject = stream;
       } catch (err) {
-        document.getElementById('sys-status').textContent = "● カメラ未接続(画面テスト用)";
+        document.getElementById('sys-status').textContent = "● カメラ起動エラー";
       }
     }
 
-    // マーク切り替え（枠だけを移動、データはクリア）
     function changeTarget(mark) {
       currentMark = mark;
       document.querySelectorAll('.player-btn').forEach(b => b.classList.remove('active'));
@@ -370,11 +360,9 @@
       const box = document.getElementById('box-player');
       box.className = 'scan-box-player';
       box.classList.add(`pos-${mark}`);
-      
       resetDisplay();
     }
 
-    // スキャンボタンのオンオフ切り替え
     function toggleStreamScan() {
       if (!isScanning) {
         startStreaming();
@@ -385,18 +373,18 @@
 
     function startStreaming() {
       isScanning = true;
+      accumulatedText = "";
       document.getElementById('main-scan-btn').classList.add('active-scan');
       document.getElementById('box-rule').classList.add('scanning');
       document.getElementById('box-player').classList.add('scanning');
-      document.getElementById('btn-main-text').textContent = "スキャン中...";
-      document.getElementById('sys-status').textContent = "● スキャン解析中";
-      document.getElementById('sys-status').style.color = "#ff0055";
+      document.getElementById('btn-main-text').textContent = "解析中...";
+      document.getElementById('sys-status').textContent = "● 映像スキャン中...";
 
-      // 0.4秒ごとにカメラの特定の枠の画像をキャプチャして文字を読み取り続けるループ
+      // 0.3秒おきにカメラ枠の画像をパシャパシャ切り抜いてOCRにかけるループ
       streamTimer = setInterval(async () => {
         if (!isScanning) return;
         await captureAndAnalyze();
-      }, 400);
+      }, 300);
     }
 
     function stopStreaming() {
@@ -406,60 +394,101 @@
       document.getElementById('box-player').classList.remove('scanning');
       document.getElementById('btn-main-text').textContent = "スキャン開始";
       document.getElementById('sys-status').textContent = "● スタンバイ完了";
-      document.getElementById('sys-status').style.color = "var(--success-color)";
       if (streamTimer) clearInterval(streamTimer);
     }
 
-    // 【コア処理】実際にカメラ映像を切り抜いて解析する関数
+    // 【修正核心部】カメラ映像から枠の部分だけを正確に切り抜いて文字認識させる処理
     async function captureAndAnalyze() {
       const video = document.getElementById('camera-video');
-      if (!video.srcObject) {
-        // カメラが繋がっていない場合のテスト用擬似処理（動作確認用）
-        simulateRealScan();
-        return;
-      }
+      if (!video.srcObject || video.readyState < 2) return;
 
-      // ※ 実際の運用時には、ここでvideo要素からCanvasを使って「上部枠」と「選択されたプレイヤー枠」の画像を切り抜き、ocrWorker.recognize()にかけます。
-      // 文字が出揃った（文章に「上げる」または「下げる」が入った）時点で、stopStreaming() を呼び出し、確定計算へ進みます。
-    }
-
-    // 擬似テスト機能：カメラなしでもロジックが正常に回るか確認するための処理
-    function simulateRealScan() {
-      // ランダムに問題を生成して、本当にその場で計算して動いていることを証明するテストロジック
-      const sampleRules = ["大きい方下げて、小さい方上げる", "大きい方上げて、小さい方下げる", "素数だけ下げる", "3の倍数だけ上げる"];
-      const sampleLeft = ["315÷7", "25", "11×3", "74"];
-      const sampleRight = ["12×4", "23", "80÷5", "15"];
+      const canvas = document.getElementById('hidden-canvas');
+      const ctx = canvas.getContext('2d');
       
-      let rand = Math.floor(Math.random() * sampleRules.length);
-      stopStreaming();
-      executeFinalLogic(sampleRules[rand], sampleLeft[rand], sampleRight[rand]);
+      // カメラの実際の解像度を取得
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // 1. 上部「問題文枠」の座標計算と切り抜き (CSSの％比率に合わせる)
+      const ruleX = canvas.width * 0.05;
+      const ruleY = canvas.height * 0.22;
+      const ruleW = canvas.width * 0.90;
+      const ruleH = canvas.height * 0.15;
+
+      ctx.drawImage(video, ruleX, ruleY, ruleW, ruleH, 0, 0, ruleW, ruleH);
+      const ruleImgData = ctx.getImageData(0, 0, ruleW, ruleH);
+      
+      // 2. 選択されたマーク（プレイヤー枠）の座標計算と切り抜き
+      let pLeftPercent = 0.36; // デフォルト中央
+      if (currentMark === 'clover') pLeftPercent = 0.04;
+      if (currentMark === 'heart') pLeftPercent = 0.68;
+
+      const playerX = canvas.width * pLeftPercent;
+      const playerY = canvas.height * 0.42;
+      const playerW = canvas.width * 0.28;
+      const playerH = canvas.height * 0.40;
+
+      ctx.drawImage(video, playerX, playerY, playerW, playerH, 0, 0, playerW, playerH);
+      const playerImgData = ctx.getImageData(0, 0, playerW, playerH);
+
+      // OCRエンジンで画像から文字を読み取る
+      try {
+        // 問題文枠の解析
+        ctx.putImageData(ruleImgData, 0, 0);
+        const ruleRes = await ocrWorker.recognize(canvas);
+        let detectedRule = ruleRes.data.text.replace(/\s+/g, ""); // 空白除去
+
+        // プレイヤー枠（数字）の解析
+        ctx.putImageData(playerImgData, 0, 0);
+        const playerRes = await ocrWorker.recognize(canvas);
+        let detectedNumbers = playerRes.data.text.replace(/\s+/g, " "); // 数字はスペース区切りに
+
+        if (detectedRule) {
+          accumulatedText += detectedRule;
+          document.getElementById('log-rule').textContent = accumulatedText;
+        }
+
+        // 静止画（一瞬で文字がある）でもタイピング（徐々に増える）でも、
+        // 「上げる」か「下げる」のキーワードが入ったら即判定に回す！
+        if (accumulatedText.includes("上げる") || accumulatedText.includes("下げる")) {
+          stopStreaming();
+          parseAndExecute(accumulatedText, detectedNumbers);
+        }
+      } catch (e) {
+        console.error("OCRエラー:", e);
+      }
     }
 
-    // 計算・判定・ポーズ反映の統合ロジック（完全に毎回その場で計算）
-    function executeFinalLogic(ruleText, leftText, rightText) {
-      // 数式文字列をその場で計算する関数（÷や×を置換）
+    // 文字列から「左の数式」「右の数式」を取り出して計算し、ポーズを決定する処理
+    function parseAndExecute(fullRule, rawNumbers) {
+      // 読み取った文字列から数字や数式（例: 315÷7 や 23）を2つ抽出する
+      // 全角の計算記号を半角に直す
+      let cleanNums = rawNumbers.replace(/×/g, '*').replace(/÷/g, '/').replace(/：/g, ':');
+      let matches = cleanNums.match(/([0-9\/*+\-]+)/g) || [];
+
+      let leftRaw = matches[0] || "0";
+      let rightRaw = matches[1] || "0";
+
       const solve = (str) => {
-        let f = str.replace(/÷/g, '/').replace(/×/g, '*');
-        try { return eval(f); } catch { return parseInt(str) || 0; }
+        try { return eval(str); } catch { return parseInt(str) || 0; }
       };
 
-      const leftVal = solve(leftText);
-      const rightVal = solve(rightText);
+      const leftVal = Math.round(solve(leftRaw));
+      const rightVal = Math.round(solve(rightRaw));
 
-      // 1. 大小メーターの更新（パッと見でどっちが大きいかわかりやすく表示）
+      // 大小不等号メーター表示
       let compSign = " ＝ ";
       if (leftVal > rightVal) compSign = " ＞ ";
       if (leftVal < rightVal) compSign = " ＜ ";
       document.getElementById('log-comparison').textContent = `左[${leftVal}] ${compSign} [${rightVal}]右`;
-      document.getElementById('log-rule').textContent = ruleText;
 
       let leftArm = 'down';
       let rightArm = 'down';
 
-      // 2. 問題のキーワードによる完全ランダム対応分岐
-      if (ruleText.includes("大きい方") || ruleText.includes("小さい方")) {
+      // ルール判定
+      if (fullRule.includes("大きい方") || fullRule.includes("小さい方")) {
         let leftIsBigger = leftVal > rightVal;
-        if (ruleText.includes("大きい方下げ") || ruleText.includes("大きい方下げて")) {
+        if (fullRule.includes("大きい方下げ")) {
           leftArm = leftIsBigger ? 'down' : 'up';
           rightArm = leftIsBigger ? 'up' : 'down';
         } else {
@@ -467,10 +496,10 @@
           rightArm = leftIsBigger ? 'down' : 'up';
         }
       } 
-      else if (ruleText.includes("素数")) {
+      else if (fullRule.includes("素数")) {
         let leftPrime = PRIMES.includes(leftVal);
         let rightPrime = PRIMES.includes(rightVal);
-        if (ruleText.includes("下げる")) {
+        if (fullRule.includes("下げる")) {
           leftArm = leftPrime ? 'down' : 'up';
           rightArm = rightPrime ? 'down' : 'up';
         } else {
@@ -478,11 +507,11 @@
           rightArm = rightPrime ? 'up' : 'down';
         }
       } 
-      else if (ruleText.includes("倍数")) {
-        let base = parseInt(ruleText.match(/\d+/)) || 3;
+      else if (fullRule.includes("倍数")) {
+        let base = parseInt(fullRule.match(/\d+/)) || 3;
         let leftMult = (leftVal % base === 0);
         let rightMult = (rightVal % base === 0);
-        if (ruleText.includes("下げる")) {
+        if (fullRule.includes("下げる")) {
           leftArm = leftMult ? 'down' : 'up';
           rightArm = rightMult ? 'down' : 'up';
         } else {
@@ -491,7 +520,7 @@
         }
       }
 
-      // 3. 日本語での指示テキスト更新
+      // 日本語での指示
       let actionResultString = "";
       if (leftArm === 'up' && rightArm === 'up') actionResultString = "【 両手上げ 】";
       else if (leftArm === 'down' && rightArm === 'down') actionResultString = "【 両手下げ 】";
@@ -499,12 +528,9 @@
       else actionResultString = "【 左下げ / 右上げ 】";
 
       document.getElementById('log-action').textContent = actionResultString;
-
-      // 4. 棒人間ミラーの反映
       moveStickman(leftArm, rightArm);
     }
 
-    // 棒人間変形（シュバッと動くようにactive-part発光連動）
     function moveStickman(left, right) {
       const l1 = document.getElementById('l-arm-1'); const l2 = document.getElementById('l-arm-2');
       const r1 = document.getElementById('r-arm-1'); const r2 = document.getElementById('r-arm-2');
@@ -535,21 +561,12 @@
     }
 
     function resetDisplay() {
-      document.getElementById('log-rule').textContent = "読み取りを待機中...";
+      document.getElementById('log-rule').textContent = "待機中...";
       document.getElementById('log-comparison').textContent = "左 [--]  待機中  [--] 右";
-      document.getElementById('log-action').textContent = "指示を待機中";
-      // 腕を初期位置（水平）に
-      document.getElementById('l-arm-1').setAttribute('x2', '32'); document.getElementById('l-arm-1').setAttribute('y2', '45');
-      document.getElementById('l-arm-2').setAttribute('x1', '32'); document.getElementById('l-arm-2').setAttribute('y1', '45');
-      document.getElementById('l-arm-2').setAttribute('x2', '15'); document.getElementById('l-arm-2').setAttribute('y2', '45');
-      document.getElementById('r-arm-1').setAttribute('x2', '68'); document.getElementById('r-arm-1').setAttribute('y2', '45');
-      document.getElementById('r-arm-2').setAttribute('x1', '68'); document.getElementById('r-arm-2').setAttribute('y1', '45');
-      document.getElementById('r-arm-2').setAttribute('x2', '85'); document.getElementById('r-arm-2').setAttribute('y2', '45');
-      document.getElementById('l-arm-1').classList.remove('active-part'); document.getElementById('l-arm-2').classList.remove('active-part');
-      document.getElementById('r-arm-1').classList.remove('active-part'); document.getElementById('r-arm-2').classList.remove('active-part');
+      document.getElementById('log-action').textContent = "ポーズ待機";
+      moveStickman('down', 'down');
     }
 
-    // 起動
     initCamera();
     initOCR();
   </script>
