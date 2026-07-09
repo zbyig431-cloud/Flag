@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CYBER FLAG ASSISTANT</title>
+  <title>INTEL-BLUE FLAG AI</title>
   <style>
     :root {
-      --bg-color: #020b14;
-      --panel-bg: #051424;
-      --border-color: #00a2ff;
+      --bg-color: #010811;
+      --panel-bg: #041121;
+      --border-color: #0091ff;
       --text-color: #ffffff;
-      --text-muted: #80cfff;
-      --shadow-color: rgba(0, 162, 255, 0.4);
-      --active-color: #00ffcc;
+      --text-muted: #62a3ff;
+      --glow-color: rgba(0, 145, 255, 0.4);
+      --success-color: #00ffcc;
+      --success-glow: rgba(0, 255, 204, 0.4);
     }
 
     * {
@@ -33,7 +34,7 @@
       flex-direction: column;
     }
 
-    /* カメラ背景エリア */
+    /* カメラ・プレビューエリア */
     .camera-container {
       position: relative;
       flex: 1;
@@ -47,7 +48,7 @@
       object-fit: cover;
     }
 
-    /* スキャンターゲット枠（選択したプレイヤーに合わせて動く） */
+    /* スキャン枠オーバーレイ */
     .scan-overlay {
       position: absolute;
       top: 0;
@@ -57,18 +58,18 @@
       pointer-events: none;
     }
 
-    /* 問題文スキャン枠（上部固定） */
+    /* 問題文スキャン枠（上部固定、タイピング文字を監視する幅広サイズ） */
     .scan-box-rule {
       position: absolute;
       top: 25%;
-      left: 10%;
-      width: 80%;
-      height: 12%;
+      left: 5%;
+      width: 90%;
+      height: 14%;
       border: 1px dashed var(--border-color);
-      box-shadow: 0 0 10px rgba(0, 162, 255, 0.2);
+      box-shadow: 0 0 10px rgba(0, 145, 255, 0.2);
     }
     .scan-box-rule::before {
-      content: "SCAN AREA: RULE";
+      content: "STREAM SCAN AREA: RULE TYPE";
       position: absolute;
       top: -18px;
       left: 5px;
@@ -78,15 +79,15 @@
       padding: 0 4px;
     }
 
-    /* プレイヤースキャン枠（動的） */
+    /* プレイヤー別ロックオン枠（マーク選択で動く） */
     .scan-box-player {
       position: absolute;
       top: 45%;
       width: 28%;
-      height: 40%;
+      height: 38%;
       border: 2px solid var(--border-color);
-      box-shadow: 0 0 15px var(--shadow-color);
-      transition: all 0.3s ease;
+      box-shadow: 0 0 15px var(--glow-color);
+      transition: all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1);
     }
     .scan-box-player::before {
       content: "TARGET LOCK";
@@ -94,28 +95,37 @@
       top: -18px;
       left: 5px;
       font-size: 0.65rem;
-      color: var(--active-color);
+      color: var(--success-color);
       background: var(--bg-color);
       padding: 0 4px;
       font-weight: bold;
     }
 
-    /* 各ポジション別の枠位置設定 */
-    .pos-clover { left: 4%; }
-    .pos-spade { left: 36%; }
-    .pos-heart { left: 68%; }
+    /* マークごとの固定位置（左・中・右） */
+    .pos-clover { left: 4%; border-color: var(--border-color); }
+    .pos-spade  { left: 36%; border-color: var(--border-color); }
+    .pos-heart  { left: 68%; border-color: var(--border-color); }
 
+    /* スキャン中のエフェクト */
+    .scanning {
+      animation: scan-pulse 0.5s infinite alternate;
+      border-color: var(--success-color) !important;
+    }
+    @keyframes scan-pulse {
+      from { opacity: 0.6; box-shadow: 0 0 10px var(--success-glow); }
+      to { opacity: 1; box-shadow: 0 0 25px var(--success-glow); }
+    }
 
-    /* 操作・ナビゲーションパネル（下部固定） */
+    /* 操作コントロールパネル（下部固定） */
     .control-panel {
-      height: 240px;
+      height: 250px;
       background-color: var(--panel-bg);
       border-top: 2px solid var(--border-color);
-      box-shadow: 0 -5px 20px var(--shadow-color);
-      padding: 12px;
+      box-shadow: 0 -5px 25px var(--glow-color);
+      padding: 10px 15px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       z-index: 10;
     }
 
@@ -123,18 +133,27 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid rgba(0, 162, 255, 0.3);
-      padding-bottom: 5px;
+      border-bottom: 1px solid rgba(0, 145, 255, 0.2);
+      padding-bottom: 3px;
     }
 
     .panel-title {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: bold;
       color: var(--text-muted);
-      letter-spacing: 2px;
+      letter-spacing: 1px;
     }
 
-    /* プレイヤー選択用セグメント */
+    /* マーク選択セグメント */
+    .selector-container {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .label-text {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
     .player-selector {
       display: flex;
       border: 1px solid var(--border-color);
@@ -148,7 +167,7 @@
       border: none;
       color: var(--text-muted);
       font-size: 0.85rem;
-      padding: 10px 0;
+      padding: 8px 0;
       cursor: pointer;
       font-weight: bold;
       transition: all 0.2s;
@@ -159,132 +178,195 @@
     .player-btn.active {
       background: var(--border-color);
       color: var(--bg-color);
-      text-shadow: 0 0 5px rgba(255,255,255,0.5);
     }
 
-    /* メイン表示エリア（アンサー表示と棒人間） */
+    /* メインシステム実行エリア */
+    .action-container {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+      align-items: center;
+    }
+
+    /* スキャン開始大ボタン */
+    .scan-trigger-btn {
+      width: 40%;
+      height: 100%;
+      background: linear-gradient(135deg, #0055ff, #00bbff);
+      border: 1px solid var(--success-color);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,187,255,0.4);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+    }
+    .scan-trigger-btn:active {
+      background: #0033aa;
+    }
+    .scan-trigger-btn.active-scan {
+      background: linear-gradient(135deg, #ff0055, #ff5500);
+      border-color: #ffcc00;
+      animation: btn-flash 0.4s infinite alternate;
+    }
+    @keyframes btn-flash {
+      from { filter: brightness(1); }
+      to { filter: brightness(1.3); }
+    }
+
+    /* 出力モニターとアバター */
     .display-area {
       flex: 1;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(0,0,0,0.4);
-      border: 1px solid rgba(0, 162, 255, 0.2);
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(0, 145, 255, 0.2);
       border-radius: 4px;
-      padding: 5px 15px;
+      padding: 5px 10px;
     }
 
-    /* デジタル文字表示 */
     .status-monitor {
       display: flex;
       flex-direction: column;
-      gap: 5px;
-      width: 55%;
+      gap: 3px;
+      width: 60%;
     }
     .monitor-row {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
-      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .monitor-row span {
       color: #fff;
       font-weight: bold;
     }
     .action-result {
-      font-size: 1.4rem;
+      font-size: 1.1rem;
       font-weight: bold;
-      color: var(--active-color);
-      text-shadow: 0 0 10px var(--active-color);
-      margin-top: 2px;
+      color: var(--success-color);
+      text-shadow: 0 0 8px var(--success-glow);
+      margin-top: 1px;
     }
 
-    /* 右側：アンサーを視覚化する棒人間グラフィック（SVG） */
+    /* 右側：SVG棒人間ミラー */
     .avatar-container {
-      width: 100px;
-      height: 100px;
+      width: 80px;
+      height: 80px;
       background: #000;
       border: 1px solid var(--border-color);
       border-radius: 4px;
       display: flex;
       justify-content: center;
       align-items: center;
-      box-shadow: inset 0 0 10px rgba(0,162,255,0.3);
+      box-shadow: inset 0 0 10px rgba(0,145,255,0.2);
     }
-
     .stickman {
       width: 100%;
       height: 100%;
     }
-    .stickman line, .stickman circle, .stickman path {
+    .stickman line, .stickman circle {
       stroke: var(--border-color);
-      stroke-width: 4;
+      stroke-width: 5;
       fill: none;
       stroke-linecap: round;
-      transition: all 0.2s ease; /* 手がシュバッと動くアニメーション */
+      transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* シュバッと動く反動を表現 */
     }
-    /* ロックオン時のアバター発光 */
     .stickman .active-part {
-      stroke: var(--active-color);
-      filter: drop-shadow(0px 0px 3px var(--active-color));
+      stroke: var(--success-color);
+      filter: drop-shadow(0px 0px 4px var(--success-color));
     }
   </style>
 </head>
 <body>
 
+  <!-- カメラレイヤー -->
   <div class="camera-container">
     <video id="camera-video" autoplay playsinline muted></video>
-    
     <div class="scan-overlay">
-      <div class="scan-box-rule"></div>
-      <div id="target-scan-box" class="scan-box-player pos-spade"></div>
+      <div id="box-rule" class="scan-box-rule"></div>
+      <!-- 初期位置は中央のスペード -->
+      <div id="box-player" class="scan-box-player pos-spade"></div>
     </div>
   </div>
 
+  <!-- 下部操作コックピット -->
   <div class="control-panel">
     <div class="panel-header">
-      <div class="panel-title">AI FLAG ASSIST SYSTEM v1.0</div>
-      <div style="font-size:0.7rem; color:var(--active-color);">● ONLINE</div>
+      <div class="panel-title">AI INSTANT FLAG MIRROR SYSTEM</div>
+      <div id="sys-status" style="font-size:0.65rem; color:var(--success-color);">● CORE_READY</div>
     </div>
 
-    <div style="font-size: 0.75rem; color: var(--text-muted);">[1] PLAYER LOCKON SELECT</div>
-    <div class="player-selector">
-      <button class="player-btn" id="btn-clover" onclick="selectPlayer('clover')">♣ CLOVER (左)</button>
-      <button class="player-btn active" id="btn-spade" onclick="selectPlayer('spade')">♠ SPADE (中)</button>
-      <button class="player-btn" id="btn-heart" onclick="selectPlayer('heart')">♥ HEART (右)</button>
-    </div>
-
-    <div style="font-size: 0.75rem; color: var(--text-muted);">[2] MOTION MIRROR MONITOR</div>
-    <div class="display-area">
-      
-      <div class="status-monitor">
-        <div class="monitor-row">RULE: <span id="log-rule">大きい方下げ、小さい方上げ</span></div>
-        <div class="monitor-row">DATA: <span id="log-data">L:315÷7(45) | R:12×4(48)</span></div>
-        <div class="action-result" id="log-action">◀ LEFT RAISE / RIGHT DOWN ▶</div>
+    <!-- 1. マーク選択（立ち位置に連動して枠が移動） -->
+    <div class="selector-container">
+      <div class="label-text">[1] SELECT YOUR CHARACTER MARK</div>
+      <div class="player-selector">
+        <button class="player-btn" id="btn-clover" onclick="changeTarget('clover')">♣ CLOVER (左)</button>
+        <button class="player-btn active" id="btn-spade" onclick="changeTarget('spade')">♠ SPADE (中)</button>
+        <button class="player-btn" id="btn-heart" onclick="changeTarget('heart')">♥ HEART (右)</button>
       </div>
+    </div>
 
-      <div class="avatar-container">
-        <svg class="stickman" viewBox="0 0 100 100">
-          <line x1="50" y1="45" x2="50" y2="75" />
-          <line x1="50" y1="75" x2="35" y2="95" />
-          <line x1="50" y1="75" x2="65" y2="95" />
-          <circle cx="50" cy="30" r="10" />
-          
-          <line id="left-arm-prox" x1="50" y1="45" x2="35" y2="35" class="active-part" />
-          <line id="left-arm-dist" x1="35" y1="35" x2="25" y2="20" class="active-part" />
-          
-          <line id="right-arm-prox" x1="50" y1="45" x2="65" y2="52" />
-          <line id="right-arm-dist" x1="65" y1="52" x2="75" y2="60" />
-        </svg>
+    <!-- 2. スキャン実行とミラー表示 -->
+    <div class="label-text">[2] EXECUTE CAPTURE & MOTION MIRROR</div>
+    <div class="action-container">
+      
+      <!-- スキャンボタン（押すと出揃うまで読み続け、確定するとポーズ） -->
+      <button class="scan-trigger-btn" id="main-scan-btn" onclick="toggleStreamScan()">
+        <span id="btn-main-text">SCAN START</span>
+        <span id="btn-sub-text" style="font-size:0.6rem; opacity:0.8;">TAP ON PROBLEM</span>
+      </button>
+
+      <!-- モニター & 棒人間 -->
+      <div class="display-area">
+        <div class="status-monitor">
+          <div class="monitor-row">TEXT: <span id="log-rule">READY...</span></div>
+          <div class="monitor-row">VAL: <span id="log-data">L: -- | R: --</span></div>
+          <div class="action-result" id="log-action">STANDBY</div>
+        </div>
+
+        <!-- SVGアバター -->
+        <div class="avatar-container">
+          <svg class="stickman" viewBox="0 0 100 100">
+            <line x1="50" y1="45" x2="50" y2="75" />
+            <line x1="50" y1="75" x2="35" y2="95" />
+            <line x1="50" y1="75" x2="65" y2="95" />
+            <circle cx="50" cy="30" r="10" />
+            
+            <!-- 左腕 (初期値:水平) -->
+            <line id="l-arm-1" x1="50" y1="45" x2="32" y2="45" />
+            <line id="l-arm-2" x1="32" y1="45" x2="15" y2="45" />
+            
+            <!-- 右腕 (初期値:水平) -->
+            <line id="r-arm-1" x1="50" y1="45" x2="68" y2="45" />
+            <line id="r-arm-2" x1="68" y1="45" x2="85" y2="45" />
+          </svg>
+        </div>
       </div>
 
     </div>
   </div>
 
   <script>
-    // カメラ起動処理
-    async function startCamera() {
+    // 内部記憶用の状態データ
+    let currentMark = 'spade';
+    let isScanning = false;
+    let scanInterval = null;
+    let typingSimulationIndex = 0; // シミュレーション用カウント
+
+    // 100以下の素数リスト
+    const PRIMES = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+
+    // カメラのセットアップ
+    async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" } },
@@ -292,81 +374,218 @@
         });
         document.getElementById('camera-video').srcObject = stream;
       } catch (err) {
-        console.error("Camera error:", err);
-        // PCブラウザ等のテスト用にダミー表示
+        console.log("Camera non-active (Simulation Mode Ready)");
       }
     }
 
-    // プレイヤーの選択と、それに連動した枠の移動処理
-    function selectPlayer(type) {
-      // ボタンの見た目切り替え
-      document.querySelectorAll('.player-btn').forEach(btn => btn.classList.remove('active'));
-      document.getElementById(`btn-${type}`).classList.add('active');
+    // 1. マーク選択ボタンが押された時の処理（枠を物理移動）
+    function changeTarget(mark) {
+      currentMark = mark;
+      document.querySelectorAll('.player-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`btn-${mark}`).classList.add('active');
 
-      // スキャン枠のクラスを変更して、対象プレイヤーの位置へシュッと移動させる
-      const scanBox = document.getElementById('target-scan-box');
-      scanBox.className = 'scan-box-player'; // 一度クリア
+      const box = document.getElementById('box-player');
+      box.className = 'scan-box-player'; // 一旦リセット
+      box.classList.add(`pos-${mark}`);
       
-      if (type === 'clover') {
-        scanBox.classList.add('pos-clover');
-        // テスト用のダミー挙動切り替え（左プレイヤーの時のポーズ）
-        setStickmanPose('down', 'up'); 
-        updateTexts("素数だけ下げる", "L:25 | R:23", "LEFT DOWN / RIGHT RAISE");
-      } else if (type === 'spade') {
-        scanBox.classList.add('pos-spade');
-        // 中央プレイヤーの時のポーズ
-        setStickmanPose('up', 'down');
-        updateTexts("大きい方下げ、小さい方上げ", "L:315÷7(45) | R:12×4(48)", "LEFT RAISE / RIGHT DOWN");
-      } else if (type === 'heart') {
-        scanBox.classList.add('pos-heart');
-        // 右プレイヤーの時のポーズ
-        setStickmanPose('down', 'down');
-        updateTexts("37の倍数だけ下げる", "L:1468 | R:222", "BOTH DOWN (両手下げ)");
+      resetSystemDisplay();
+    }
+
+    // 2. 問題が出た瞬間の「スキャン開始」ボタン処理
+    function toggleStreamScan() {
+      const btn = document.getElementById('main-scan-btn');
+      const boxRule = document.getElementById('box-rule');
+      const boxPlayer = document.getElementById('box-player');
+      const status = document.getElementById('sys-status');
+
+      if (!isScanning) {
+        // スキャンモード開始
+        isScanning = true;
+        btn.classList.add('active-scan');
+        boxRule.classList.add('scanning');
+        boxPlayer.classList.add('scanning');
+        document.getElementById('btn-main-text').textContent = "SCANNING...";
+        document.getElementById('btn-sub-text').textContent = "STREAMING ACTIVE";
+        status.textContent = "● BUSY_PROCESSING";
+        status.style.color = "#ff0055";
+
+        // 実機での挙動イメージ：ここで1秒間に5回OCRを回す
+        // 今回は文字が徐々にタイピングされる様子を再現したシミュレーターを回します
+        typingSimulationIndex = 0;
+        executeStreamAnalysis();
+      } else {
+        // 手動でストップされた場合
+        stopScanning();
       }
     }
 
-    // スマホ内の棒人間のポーズをプログラムで制御する関数
-    function setStickmanPose(leftPose, rightPose) {
-      const lProx = document.getElementById('left-arm-prox');
-      const lDist = document.getElementById('left-arm-dist');
-      const rProx = document.getElementById('right-arm-prox');
-      const rDist = document.getElementById('right-arm-dist');
+    function stopScanning() {
+      isScanning = false;
+      const btn = document.getElementById('main-scan-btn');
+      const boxRule = document.getElementById('box-rule');
+      const boxPlayer = document.getElementById('box-player');
+      const status = document.getElementById('sys-status');
 
-      // 左腕の変形
+      btn.classList.remove('active-scan');
+      boxRule.classList.remove('scanning');
+      boxPlayer.classList.remove('scanning');
+      document.getElementById('btn-main-text').textContent = "SCAN START";
+      document.getElementById('btn-sub-text').textContent = "TAP ON PROBLEM";
+      status.textContent = "● CORE_READY";
+      status.style.color = "var(--success-color)";
+      
+      if(scanInterval) clearInterval(scanInterval);
+    }
+
+    // 文字がタイピング入力されていくのを監視・追従するコアロジック
+    function executeStreamAnalysis() {
+      // 選択したマークに応じた模擬データ
+      const mockProblems = {
+        clover: { rule: "素数だけ下げる", leftRaw: "25", rightRaw: "23" },
+        spade:  { rule: "大きい方下げて、小さい方上げる", leftRaw: "315÷7", rightRaw: "12×4" },
+        heart:  { rule: "37の倍数だけ下げる", leftRaw: "1468", rightRaw: "222" }
+      };
+
+      const problem = mockProblems[currentMark];
+      
+      scanInterval = setInterval(() => {
+        typingSimulationIndex += 2; // 文字が2文字ずつ打ち込まれていくのを表現
+        let partialRule = problem.rule.substring(0, typingSimulationIndex);
+        
+        // 画面に現在までにスキャンできた途中の文字をリアルタイム表示
+        document.getElementById('log-rule').textContent = partialRule;
+        document.getElementById('log-data').textContent = `L: ${problem.leftRaw} | R: ${problem.rightRaw}`;
+
+        // 【最重要の自動判定トリガー】
+        // 文字が出揃い、文末の決定打「上げる」または「下げる」が読み取れたかチェック
+        if (partialRule.includes("上げる") || partialRule.includes("下げる")) {
+          // 条件クリア！スキャンを自動で確定（ストップ）させてポーズを実行
+          stopScanning();
+          calculateAndPose(problem.rule, problem.leftRaw, problem.rightRaw);
+        }
+      }, 250); // 0.25秒ごとに文字の成長をチェックし続ける
+    }
+
+    // 計算および旗揚げポーズロジック
+    function calculateAndPose(fullRule, leftRaw, rightRaw) {
+      // 数式の自動計算処理（÷を/に、×を*に変えて計算）
+      const calc = (str) => {
+        let formula = str.replace(/÷/g, '/').replace(/×/g, '*');
+        try { return eval(formula); } catch { return parseInt(str) || 0; }
+      };
+
+      const leftVal = calc(leftRaw);
+      const rightVal = calc(rightRaw);
+
+      let leftAction = 'down';  // デフォルト：下げ
+      let rightAction = 'down'; // デフォルト：下げ
+      let actionText = "BOTH DOWN";
+
+      // モード分岐
+      if (fullRule.includes("大きい方") || fullRule.includes("小さい方")) {
+        // 大小比較モード
+        let isLeftBigger = leftVal > rightVal;
+        
+        if (fullRule.includes("大きい方下げて、小さい方上げる") || fullRule.includes("大きい方下げ、小さい方上げ")) {
+          leftAction = isLeftBigger ? 'down' : 'up';
+          rightAction = isLeftBigger ? 'up' : 'down';
+        } else { // 大きい方上げて、小さい方下げる
+          leftAction = isLeftBigger ? 'up' : 'down';
+          rightAction = isLeftBigger ? 'down' : 'up';
+        }
+      } 
+      else if (fullRule.includes("素数")) {
+        // 素数判定モード
+        let isLeftPrime = PRIMES.includes(leftVal);
+        let isRightPrime = PRIMES.includes(rightVal);
+
+        if (fullRule.includes("下げる")) {
+          leftAction = isLeftPrime ? 'down' : 'up';
+          rightAction = isRightPrime ? 'down' : 'up';
+        } else { // 素数だけ上げる
+          leftAction = isLeftPrime ? 'up' : 'down';
+          rightAction = isRightPrime ? 'up' : 'down';
+        }
+      } 
+      else if (fullRule.includes("倍数")) {
+        // 倍数判定モード (例: 37の倍数)
+        let baseNum = parseInt(fullRule.match(/\d+/)[0]) || 1;
+        let isLeftMultiple = (leftVal % baseNum === 0);
+        let isRightMultiple = (rightVal % baseNum === 0);
+
+        if (fullRule.includes("下げる")) {
+          leftAction = isLeftMultiple ? 'down' : 'up';
+          rightAction = isRightMultiple ? 'down' : 'up';
+        } else { // 倍数だけ上げる
+          leftAction = isLeftMultiple ? 'up' : 'down';
+          rightAction = isRightMultiple ? 'up' : 'down';
+        }
+      }
+
+      // テキスト表示の更新
+      document.getElementById('log-data').textContent = `L:${leftRaw}(${leftVal}) | R:${rightRaw}(${rightVal})`;
+      
+      if(leftAction === 'up' && rightAction === 'up') actionText = "◀ BOTH RAISE ▶";
+      else if(leftAction === 'down' && rightAction === 'down') actionText = "■ BOTH DOWN ■";
+      else if(leftAction === 'up') actionText = "◀ LEFT RAISE / RIGHT DOWN";
+      else actionText = "LEFT DOWN / RIGHT RAISE ▶";
+      
+      document.getElementById('log-action').textContent = actionText;
+
+      // 棒人間をシュバッと動かす
+      animateStickman(leftAction, rightAction);
+    }
+
+    // 棒人間のSVG腕パーツを制御するアニメーション関数
+    function animateStickman(leftPose, rightPose) {
+      const l1 = document.getElementById('l-arm-1');
+      const l2 = document.getElementById('l-arm-2');
+      const r1 = document.getElementById('r-arm-1');
+      const r2 = document.getElementById('r-arm-2');
+
       if (leftPose === 'up') {
-        lProx.setAttribute('x2', '35'); lProx.setAttribute('y2', '35');
-        lDist.setAttribute('x1', '35'); lDist.setAttribute('y1', '35');
-        lDist.setAttribute('x2', '25'); lDist.setAttribute('y2', '20');
-        lProx.classList.add('active-part'); lDist.classList.add('active-part');
+        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '32');
+        l2.setAttribute('x1', '35'); l2.setAttribute('y1', '32');
+        l2.setAttribute('x2', '25'); l2.setAttribute('y2', '12');
+        l1.classList.add('active-part'); l2.classList.add('active-part');
       } else { // down
-        lProx.setAttribute('x2', '35'); lProx.setAttribute('y2', '52');
-        lDist.setAttribute('x1', '35'); lDist.setAttribute('y1', '52');
-        lDist.setAttribute('x2', '25'); lDist.setAttribute('y2', '60');
-        lProx.classList.remove('active-part'); lDist.classList.remove('active-part');
+        l1.setAttribute('x2', '35'); l1.setAttribute('y2', '58');
+        l2.setAttribute('x1', '35'); l2.setAttribute('y1', '58');
+        l2.setAttribute('x2', '25'); l2.setAttribute('y2', '72');
+        l1.classList.remove('active-part'); l2.classList.remove('active-part');
       }
 
-      // 右腕の変形
       if (rightPose === 'up') {
-        rProx.setAttribute('x2', '65'); rProx.setAttribute('y2', '35');
-        rDist.setAttribute('x1', '65'); rDist.setAttribute('y1', '35');
-        rDist.setAttribute('x2', '75'); rDist.setAttribute('y2', '20');
-        rProx.classList.add('active-part'); rDist.classList.add('active-part');
+        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '32');
+        r2.setAttribute('x1', '65'); r2.setAttribute('y1', '32');
+        r2.setAttribute('x2', '75'); r2.setAttribute('y2', '12');
+        r1.classList.add('active-part'); r2.classList.add('active-part');
       } else { // down
-        rProx.setAttribute('x2', '65'); rProx.setAttribute('y2', '52');
-        rDist.setAttribute('x1', '65'); rDist.setAttribute('y1', '52');
-        rDist.setAttribute('x2', '75'); rDist.setAttribute('y2', '60');
-        rProx.classList.remove('active-part'); rDist.classList.remove('active-part');
+        r1.setAttribute('x2', '65'); r1.setAttribute('y2', '58');
+        r2.setAttribute('x1', '65'); r2.setAttribute('y1', '58');
+        r2.setAttribute('x2', '75'); r2.setAttribute('y2', '72');
+        r1.classList.remove('active-part'); r2.classList.remove('active-part');
       }
     }
 
-    function updateTexts(rule, data, action) {
-      document.getElementById('log-rule').textContent = rule;
-      document.getElementById('log-data').textContent = data;
-      document.getElementById('log-action').textContent = action;
+    function resetSystemDisplay() {
+      document.getElementById('log-rule').textContent = "READY...";
+      document.getElementById('log-data').textContent = "L: -- | R: --";
+      document.getElementById('log-action').textContent = "STANDBY";
+      animateStickman('neutral', 'neutral');
+      // 初期ポーズ（水平）に戻す
+      document.getElementById('l-arm-1').setAttribute('x2', '32'); document.getElementById('l-arm-1').setAttribute('y2', '45');
+      document.getElementById('l-arm-2').setAttribute('x1', '32'); document.getElementById('l-arm-2').setAttribute('y1', '45');
+      document.getElementById('l-arm-2').setAttribute('x2', '15'); document.getElementById('l-arm-2').setAttribute('y2', '45');
+      document.getElementById('r-arm-1').setAttribute('x2', '68'); document.getElementById('r-arm-1').setAttribute('y2', '45');
+      document.getElementById('r-arm-2').setAttribute('x1', '68'); document.getElementById('r-arm-2').setAttribute('y1', '45');
+      document.getElementById('r-arm-2').setAttribute('x2', '85'); document.getElementById('r-arm-2').setAttribute('y2', '45');
+      document.getElementById('l-arm-1').classList.remove('active-part'); document.getElementById('l-arm-2').classList.remove('active-part');
+      document.getElementById('r-arm-1').classList.remove('active-part'); document.getElementById('r-arm-2').classList.remove('active-part');
     }
 
     // 起動
-    startCamera();
+    initCamera();
   </script>
 </body>
 </html>
