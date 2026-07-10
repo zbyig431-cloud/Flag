@@ -3,66 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>2式分離・自動計算ツール</title>
+  <title>1式集中・文字枠付きスキャンツール</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.0.1/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { background-color: #020b14; color: #ffffff; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    .camera-area { position: relative; width: 100%; height: 45vh; background: #000; }
+    /* カメラと認識枠を重ねるエリア */
+    .camera-container { position: relative; width: 100%; height: 60vh; background: #000; }
     #camera-video { width: 100%; height: 100%; object-fit: cover; }
-    #sys-status { position: absolute; top: 10px; left: 10px; padding: 6px 12px; background: rgba(0,0,0,0.8); border-radius: 4px; font-size: 0.8rem; border: 1px solid #00d2ff; }
-
-    .control-panel { height: 55vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
     
-    .btn-area { width: 100%; height: 55px; }
-    .scan-btn { width: 100%; height: 100%; background: #007bff; border: 2px solid #fff; border-radius: 8px; color: #fff; font-size: 1.3rem; font-weight: bold; cursor: pointer; }
+    /* カメラの上に重なって、認識した数字を四角く囲むキャンバス */
+    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    
+    #sys-status { position: absolute; top: 10px; left: 10px; padding: 6px 12px; background: rgba(0,0,0,0.8); border-radius: 4px; font-size: 0.8rem; border: 1px solid #00d2ff; z-index: 10; }
+
+    /* 下半分：結果表示 */
+    .control-panel { height: 40vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+    
+    .btn-area { width: 100%; height: 50px; }
+    .scan-btn { width: 100%; height: 100%; background: #007bff; border: 2px solid #fff; border-radius: 8px; color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; }
     .scan-btn.active { background: #dc3545; }
 
-    /* OCRが読み取った生の文字を確認するデバッグ枠（超重要） */
-    .debug-log { font-size: 0.75rem; color: #00ffcc; background: #000; padding: 6px; border-radius: 4px; height: 50px; overflow-y: auto; border: 1px solid #334e68; }
+    .result-view { flex: 1; background: rgba(0,0,0,0.5); border: 2px solid #334e68; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; }
+    .result-view.detected { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
 
-    .calc-boxes { flex: 1; display: flex; gap: 15px; margin-top: 5px; }
-    .result-box { flex: 1; background: rgba(0,0,0,0.4); border: 2px solid #334e68; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    .result-box.detected { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
-    
-    .box-label { font-size: 0.85rem; color: #00d2ff; font-weight: bold; margin-bottom: 5px; }
-    .detected-formula { font-size: 1.3rem; color: #ffcc00; min-height: 28px; font-family: monospace; }
-    .calc-answer { font-size: 2.8rem; font-weight: bold; color: #ffffff; margin-top: 5px; }
-    .result-box.detected .calc-answer { color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+    .formula-display { font-size: 1.6rem; color: #ffcc00; font-family: monospace; font-weight: bold; }
+    .answer-display { font-size: 3.5rem; font-weight: bold; color: #00ffcc; margin-top: 5px; text-shadow: 0 0 10px rgba(0,255,204,0.4); }
 
     #hidden-canvas { display: none; }
   </style>
 </head>
 <body>
 
-  <div class="camera-area">
+  <div class="camera-container">
     <div id="sys-status" style="color: yellow;">AI起動中...</div>
     <video id="camera-video" autoplay playsinline muted></video>
+    <!-- ここに認識した文字の「赤い枠」をリアルタイム描写します -->
+    <canvas id="overlay-canvas"></canvas>
   </div>
 
   <div class="control-panel">
     <div class="btn-area">
-      <button class="scan-btn" id="main-btn" onclick="toggleScan()" disabled>計算スキャン開始</button>
+      <button class="scan-btn" id="main-btn" onclick="toggleScan()" disabled>1式スキャン開始</button>
     </div>
 
-    <!-- AIが読み取った生の文字列をリアルタイムに表示（ブレがないか確認用） -->
-    <div class="debug-log" id="raw-log">カメラに式を映してください...</div>
-
-    <div class="calc-boxes">
-      <!-- 抽出された1つ目の式 -->
-      <div class="result-box" id="box-left">
-        <div class="box-label">【 検出式 ① 】</div>
-        <div class="detected-formula" id="formula-left">---</div>
-        <div class="calc-answer" id="answer-left">-</div>
-      </div>
-
-      <!-- 抽出された2つ目の式 -->
-      <div class="result-box" id="box-right">
-        <div class="box-label">【 検出式 ② 】</div>
-        <div class="detected-formula" id="formula-right">---</div>
-        <div class="calc-answer" id="answer-right">-</div>
-      </div>
+    <div class="result-view" id="result-box">
+      <div class="formula-display" id="form-out">式を探しています...</div>
+      <div class="answer-display" id="ans-out">-</div>
     </div>
   </div>
 
@@ -82,115 +70,134 @@
           tessedit_char_whitelist: '0123456789+-*/xX×÷＋−= '
         });
         
-        document.getElementById('sys-status').textContent = '● スキャン準備完了';
+        document.getElementById('sys-status').textContent = '● 枠表示モード準備完了';
         document.getElementById('sys-status').style.color = '#00ffcc';
         document.getElementById('main-btn').disabled = false;
 
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         document.getElementById('camera-video').srcObject = stream;
+        
+        // カメラ映像のサイズが確定したらオーバーレイ用キャンバスのサイズを合わせる
+        document.getElementById('camera-video').onloadedmetadata = () => {
+          adjustCanvasSize();
+        };
       } catch (e) {
         document.getElementById('sys-status').textContent = '❌ 起動エラー';
         document.getElementById('sys-status').style.color = '#ff3366';
       }
     }
 
+    function adjustCanvasSize() {
+      const video = document.getElementById('camera-video');
+      const overlay = document.getElementById('overlay-canvas');
+      overlay.width = video.clientWidth;
+      overlay.height = video.clientHeight;
+    }
+
+    window.addEventListener('resize', adjustCanvasSize);
+
     function toggleScan() {
       if (!isScanning) {
         isScanning = true;
         document.getElementById('main-btn').classList.add('active');
         document.getElementById('main-btn').textContent = 'ストップ';
-        timer = setInterval(analyzeFormulas, 400);
+        timer = setInterval(analyzeSingleFormula, 300);
       } else {
         isScanning = false;
         document.getElementById('main-btn').classList.remove('active');
-        document.getElementById('main-btn').textContent = '計算スキャン開始';
+        document.getElementById('main-btn').textContent = '1式スキャン開始';
         clearInterval(timer);
+        clearOverlay();
       }
     }
 
-    // 全角やブレを半角記号に統一
+    function clearOverlay() {
+      const overlay = document.getElementById('overlay-canvas');
+      const ctx = overlay.getContext('2d');
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+
     function cleanText(str) {
       if (!str) return "";
       let res = str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
       res = res.replace(/×/g, '*').replace(/x/gi, '*').replace(/X/g, '*');
-      res = res.replace(/÷/g, '/');
-      res = res.replace(/＋/g, '+').replace(/−/g, '-').replace(/₋/g, '-');
+      res = res.replace(/÷/g, '/').replace(/＋/g, '+').replace(/−/g, '-');
       return res;
     }
 
-    async function analyzeFormulas() {
+    async function analyzeSingleFormula() {
       const video = document.getElementById('camera-video');
       if (!video.srcObject || video.readyState < 2) return;
 
-      const canvas = document.getElementById('hidden-canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const hidden = document.getElementById('hidden-canvas');
+      const hCtx = hidden.getContext('2d');
+      hidden.width = video.videoWidth;
+      hidden.height = video.videoHeight;
+      hCtx.drawImage(video, 0, 0, hidden.width, hidden.height);
+
+      const overlay = document.getElementById('overlay-canvas');
+      const oCtx = overlay.getContext('2d');
 
       try {
-        const res = await worker.recognize(canvas);
-        let raw = res.data.text.replace(/\s+/g, ""); // すべての空白を除去
+        // 【ここがポイント】文字の位置データ（blocks, lines, words, symbols）まで全部取得するモード
+        const result = await worker.recognize(hidden);
         
-        if (!raw) {
-          document.getElementById('raw-log').textContent = "（文字が読めません。カメラを近づけてください）";
-          return;
-        }
+        // まず描画をリセット
+        oCtx.clearRect(0, 0, overlay.width, overlay.height);
 
+        // カメラ実写サイズと、ブラウザ表示画面サイズとの比率を計算（枠を正しい位置にズラさないための計算）
+        const scaleX = overlay.width / hidden.width;
+        const scaleY = overlay.height / hidden.height;
+
+        // 【視覚化ロジック】AIが認識した「個々の文字・単語」の座標をループで回して、カメラの上に赤い四角を描く！
+        const words = result.data.words;
+        words.forEach(word => {
+          // 数字か記号が含まれている枠だけを光らせる
+          if (/[0-9+\-*/xX×÷＋−]/.test(word.text)) {
+            const box = word.bbox; // 文字を囲む四角の座標 {x0, y0, x1, y1}
+            
+            oCtx.strokeStyle = '#ff3366'; // 認識した文字を赤い枠で囲む
+            oCtx.lineWidth = 3;
+            oCtx.strokeRect(
+              box.x0 * scaleX, 
+              box.y0 * scaleY, 
+              (box.x1 - box.x0) * scaleX, 
+              (box.y1 - box.y0) * scaleY
+            );
+
+            // 認識した文字の答えを小さく上に表示
+            oCtx.fillStyle = '#ff3366';
+            oCtx.font = '14px sans-serif';
+            oCtx.fillText(word.text, box.x0 * scaleX, (box.y0 * scaleY) - 5);
+          }
+        });
+
+        // 【計算ロジック】全体の文字列から、最初に見つかった「1つの数式」だけを引っこ抜く
+        let raw = result.data.text.replace(/\s+/g, "");
         let cleaned = cleanText(raw);
-        document.getElementById('raw-log').textContent = `[読取生データ]: ${cleaned}`;
-
-        // 【今回のコア・ロジック：正規表現】
-        // 「連続する数字」＋「計算記号」＋「連続する数字」のセットを全テキストから探します
-        // 例: "8*101+73" という文字列から、1つずつ条件に合うものを探します
         
-        let foundFormulas = [];
-        let regex = /(\d+)([+\-*/])(\d+)/g;
-        let match;
+        // 「数字 ➔ 記号 ➔ 数字」のセットを1つだけ探す
+        let match = cleaned.match(/\d+[+\-*/]\d+/);
 
-        // 文字列全体から「数字・記号・数字」のペアを順番に抽出
-        while ((match = regex.exec(cleaned)) !== null) {
-          // match[0] には "8*10" や "1+73" が入る
-          foundFormulas.push(match[0]);
+        if (match) {
+          let formula = match[0];
           
-          // 【超重要】1行にくっついて読まれた場合の「数字の奪い合い」を防ぐ対策
-          // 例: "8*101+73" の場合、最初の "8*10" を読んだ後、
-          // 次の検索開始位置を "10" の後ろ（つまり "1+73" の直前）に手動で戻します。
-          // これをやらないと、"1"が前の式に吸われて次の式が "+73" になり壊れます。
-          regex.lastIndex = match.index + match[1].length + match[2].length + 1;
-        }
-
-        // 2つの独立した式がきれいにつかめた場合
-        if (foundFormulas.length >= 2) {
-          // 成功したので自動停止
+          // 画面表示用に綺麗に整える
+          document.getElementById('form-out').textContent = formula.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
+          
+          // 計算
+          let ans = new Function(`return ${formula}`)();
+          document.getElementById('ans-out').textContent = Math.round(ans);
+          document.getElementById('result-box').classList.add('detected');
+          
+          // 1つの式が解けたら自動ストップ
           toggleScan();
-
-          let leftForm = foundFormulas[0];
-          let rightForm = foundFormulas[1];
-
-          // 画面表示用に綺麗に変換（*を×に戻すなど）
-          document.getElementById('formula-left').textContent = leftForm.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
-          document.getElementById('formula-right').textContent = rightForm.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
-
-          // 計算を実行（evalの安全な代替としてFunctionを使用）
-          let leftAns = new Function(`return ${leftForm}`)();
-          let rightAns = new Function(`return ${rightForm}`)();
-
-          // 画面にデカデカと答えを表示
-          document.getElementById('answer-left').textContent = Math.round(leftAns);
-          document.getElementById('answer-right').textContent = Math.round(rightAns);
-
-          document.getElementById('box-left').classList.add('detected');
-          document.getElementById('box-right').classList.add('detected');
         } else {
-          // 条件に合う式が2つ揃うまではリセットしてスキャンを続ける
-          document.getElementById('formula-left').textContent = '---';
-          document.getElementById('formula-right').textContent = '---';
-          document.getElementById('answer-left').textContent = '-';
-          document.getElementById('answer-right').textContent = '-';
-          document.getElementById('box-left').classList.remove('detected');
-          document.getElementById('box-right').classList.remove('detected');
+          document.getElementById('form-out').textContent = '式を探しています...';
+          document.getElementById('ans-out').textContent = '-';
+          document.getElementById('result-box').classList.remove('detected');
         }
+
       } catch (e) {
         console.error(e);
       }
