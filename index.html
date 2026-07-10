@@ -3,33 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>2式同時・自動計算ツール</title>
+  <title>2式分離・自動計算ツール</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.0.1/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { background-color: #020b14; color: #ffffff; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    .camera-area { position: relative; width: 100%; height: 50vh; background: #000; }
+    .camera-area { position: relative; width: 100%; height: 45vh; background: #000; }
     #camera-video { width: 100%; height: 100%; object-fit: cover; }
     #sys-status { position: absolute; top: 10px; left: 10px; padding: 6px 12px; background: rgba(0,0,0,0.8); border-radius: 4px; font-size: 0.8rem; border: 1px solid #00d2ff; }
 
-    .control-panel { height: 50vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .control-panel { height: 55vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
     
-    .btn-area { width: 100%; height: 60px; }
+    .btn-area { width: 100%; height: 55px; }
     .scan-btn { width: 100%; height: 100%; background: #007bff; border: 2px solid #fff; border-radius: 8px; color: #fff; font-size: 1.3rem; font-weight: bold; cursor: pointer; }
     .scan-btn.active { background: #dc3545; }
 
-    .calc-boxes { flex: 1; display: flex; gap: 15px; }
+    /* OCRが読み取った生の文字を確認するデバッグ枠（超重要） */
+    .debug-log { font-size: 0.75rem; color: #00ffcc; background: #000; padding: 6px; border-radius: 4px; height: 50px; overflow-y: auto; border: 1px solid #334e68; }
+
+    .calc-boxes { flex: 1; display: flex; gap: 15px; margin-top: 5px; }
     .result-box { flex: 1; background: rgba(0,0,0,0.4); border: 2px solid #334e68; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .result-box.detected { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
     
-    .box-label { font-size: 0.9rem; color: #00d2ff; font-weight: bold; margin-bottom: 5px; }
-    .detected-formula { font-size: 1.2rem; color: #a0aec0; min-height: 28px; word-break: break-all; text-align: center; }
-    .calc-answer { font-size: 2.5rem; font-weight: bold; color: #ffffff; margin-top: 5px; }
+    .box-label { font-size: 0.85rem; color: #00d2ff; font-weight: bold; margin-bottom: 5px; }
+    .detected-formula { font-size: 1.3rem; color: #ffcc00; min-height: 28px; font-family: monospace; }
+    .calc-answer { font-size: 2.8rem; font-weight: bold; color: #ffffff; margin-top: 5px; }
     .result-box.detected .calc-answer { color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
-
-    /* デバッグ用（何が読み取れているかリアルタイムに見るため） */
-    .debug-log { font-size: 0.7rem; color: #888; background: #000; padding: 4px; border-radius: 4px; height: 35px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
     #hidden-canvas { display: none; }
   </style>
@@ -46,18 +46,20 @@
       <button class="scan-btn" id="main-btn" onclick="toggleScan()" disabled>計算スキャン開始</button>
     </div>
 
-    <!-- OCRが今何を読んでいるか生データを表示する枠 -->
-    <div class="debug-log" id="raw-log">読取データ: 待機中...</div>
+    <!-- AIが読み取った生の文字列をリアルタイムに表示（ブレがないか確認用） -->
+    <div class="debug-log" id="raw-log">カメラに式を映してください...</div>
 
     <div class="calc-boxes">
+      <!-- 抽出された1つ目の式 -->
       <div class="result-box" id="box-left">
-        <div class="box-label">【 1つ目の式 】</div>
+        <div class="box-label">【 検出式 ① 】</div>
         <div class="detected-formula" id="formula-left">---</div>
         <div class="calc-answer" id="answer-left">-</div>
       </div>
 
+      <!-- 抽出された2つ目の式 -->
       <div class="result-box" id="box-right">
-        <div class="box-label">【 2つ目の式 】</div>
+        <div class="box-label">【 検出式 ② 】</div>
         <div class="detected-formula" id="formula-right">---</div>
         <div class="calc-answer" id="answer-right">-</div>
       </div>
@@ -77,7 +79,6 @@
         await worker.loadLanguage('eng'); 
         await worker.initialize('eng');
         await worker.setParameters({
-          // 誤認識を防ぐため、数字と基本記号（全角の乗除含む）のみ許可
           tessedit_char_whitelist: '0123456789+-*/xX×÷＋−= '
         });
         
@@ -107,12 +108,10 @@
       }
     }
 
-    // 表記のブレを「完璧に半角の計算式」に統一する
+    // 全角やブレを半角記号に統一
     function cleanText(str) {
       if (!str) return "";
-      // 全角数字 -> 半角数字
       let res = str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-      // 各種掛け算・割り算・引き算記号の統一
       res = res.replace(/×/g, '*').replace(/x/gi, '*').replace(/X/g, '*');
       res = res.replace(/÷/g, '/');
       res = res.replace(/＋/g, '+').replace(/−/g, '-').replace(/₋/g, '-');
@@ -131,39 +130,62 @@
 
       try {
         const res = await worker.recognize(canvas);
-        let raw = res.data.text.replace(/\s+/g, ""); // 空白を詰める
-        document.getElementById('raw-log').textContent = "読取データ: " + (raw ? raw : "（空欄）");
+        let raw = res.data.text.replace(/\s+/g, ""); // すべての空白を除去
+        
+        if (!raw) {
+          document.getElementById('raw-log').textContent = "（文字が読めません。カメラを近づけてください）";
+          return;
+        }
 
         let cleaned = cleanText(raw);
+        document.getElementById('raw-log').textContent = `[読取生データ]: ${cleaned}`;
 
-        // 【ここが超強化ポイント】
-        // 1行に繋がってしまっていても、「数字+記号+数字」のパターンを個別に抜き出す
-        // 例: "10*81+73" から ["10*8", "1+73"] を確実に抽出
-        let validFormulas = cleaned.match(/\d+[+\-*/]\d+/g) || [];
+        // 【今回のコア・ロジック：正規表現】
+        // 「連続する数字」＋「計算記号」＋「連続する数字」のセットを全テキストから探します
+        // 例: "8*101+73" という文字列から、1つずつ条件に合うものを探します
+        
+        let foundFormulas = [];
+        let regex = /(\d+)([+\-*/])(\d+)/g;
+        let match;
 
-        if (validFormulas.length >= 2) {
-          // 2つ以上の式が抽出できたらその時点でストップして計算
+        // 文字列全体から「数字・記号・数字」のペアを順番に抽出
+        while ((match = regex.exec(cleaned)) !== null) {
+          // match[0] には "8*10" や "1+73" が入る
+          foundFormulas.push(match[0]);
+          
+          // 【超重要】1行にくっついて読まれた場合の「数字の奪い合い」を防ぐ対策
+          // 例: "8*101+73" の場合、最初の "8*10" を読んだ後、
+          // 次の検索開始位置を "10" の後ろ（つまり "1+73" の直前）に手動で戻します。
+          // これをやらないと、"1"が前の式に吸われて次の式が "+73" になり壊れます。
+          regex.lastIndex = match.index + match[1].length + match[2].length + 1;
+        }
+
+        // 2つの独立した式がきれいにつかめた場合
+        if (foundFormulas.length >= 2) {
+          // 成功したので自動停止
           toggleScan();
 
-          let leftForm = validFormulas[0];
-          let rightForm = validFormulas[1];
+          let leftForm = foundFormulas[0];
+          let rightForm = foundFormulas[1];
 
-          document.getElementById('formula-left').textContent = leftForm.replace(/\*/g, '×').replace(/\//g, '÷');
-          document.getElementById('formula-right').textContent = rightForm.replace(/\*/g, '×').replace(/\//g, '÷');
+          // 画面表示用に綺麗に変換（*を×に戻すなど）
+          document.getElementById('formula-left').textContent = leftForm.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
+          document.getElementById('formula-right').textContent = rightForm.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
 
-          // 安全に計算を実行
+          // 計算を実行（evalの安全な代替としてFunctionを使用）
           let leftAns = new Function(`return ${leftForm}`)();
           let rightAns = new Function(`return ${rightForm}`)();
 
+          // 画面にデカデカと答えを表示
           document.getElementById('answer-left').textContent = Math.round(leftAns);
           document.getElementById('answer-right').textContent = Math.round(rightAns);
 
           document.getElementById('box-left').classList.add('detected');
           document.getElementById('box-right').classList.add('detected');
         } else {
-          // 見つからない間はリセット
-          document.getElementById('formula-left').textContent = '検索中...';
-          document.getElementById('formula-right').textContent = '検索中...';
+          // 条件に合う式が2つ揃うまではリセットしてスキャンを続ける
+          document.getElementById('formula-left').textContent = '---';
+          document.getElementById('formula-right').textContent = '---';
           document.getElementById('answer-left').textContent = '-';
           document.getElementById('answer-right').textContent = '-';
           document.getElementById('box-left').classList.remove('detected');
