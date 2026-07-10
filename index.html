@@ -9,19 +9,16 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { background-color: #020b14; color: #ffffff; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-    /* 上半分：カメラ映像（余計な枠はなし） */
     .camera-area { position: relative; width: 100%; height: 50vh; background: #000; }
     #camera-video { width: 100%; height: 100%; object-fit: cover; }
     #sys-status { position: absolute; top: 10px; left: 10px; padding: 6px 12px; background: rgba(0,0,0,0.8); border-radius: 4px; font-size: 0.8rem; border: 1px solid #00d2ff; }
 
-    /* 下半分：計算結果モニター */
     .control-panel { height: 50vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
     
     .btn-area { width: 100%; height: 60px; }
     .scan-btn { width: 100%; height: 100%; background: #007bff; border: 2px solid #fff; border-radius: 8px; color: #fff; font-size: 1.3rem; font-weight: bold; cursor: pointer; }
     .scan-btn.active { background: #dc3545; }
 
-    /* 左右の計算結果をデカデカと表示するエリア */
     .calc-boxes { flex: 1; display: flex; gap: 15px; }
     .result-box { flex: 1; background: rgba(0,0,0,0.4); border: 2px solid #334e68; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     .result-box.detected { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
@@ -30,6 +27,9 @@
     .detected-formula { font-size: 1.2rem; color: #a0aec0; min-height: 28px; word-break: break-all; text-align: center; }
     .calc-answer { font-size: 2.5rem; font-weight: bold; color: #ffffff; margin-top: 5px; }
     .result-box.detected .calc-answer { color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+
+    /* デバッグ用（何が読み取れているかリアルタイムに見るため） */
+    .debug-log { font-size: 0.7rem; color: #888; background: #000; padding: 4px; border-radius: 4px; height: 35px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
     #hidden-canvas { display: none; }
   </style>
@@ -46,17 +46,18 @@
       <button class="scan-btn" id="main-btn" onclick="toggleScan()" disabled>計算スキャン開始</button>
     </div>
 
+    <!-- OCRが今何を読んでいるか生データを表示する枠 -->
+    <div class="debug-log" id="raw-log">読取データ: 待機中...</div>
+
     <div class="calc-boxes">
-      <!-- 左側の式と答え -->
       <div class="result-box" id="box-left">
-        <div class="box-label">【 左側の式 】</div>
+        <div class="box-label">【 1つ目の式 】</div>
         <div class="detected-formula" id="formula-left">---</div>
         <div class="calc-answer" id="answer-left">-</div>
       </div>
 
-      <!-- 右側の式と答え -->
       <div class="result-box" id="box-right">
-        <div class="box-label">【 右側の式 】</div>
+        <div class="box-label">【 2つ目の式 】</div>
         <div class="detected-formula" id="formula-right">---</div>
         <div class="calc-answer" id="answer-right">-</div>
       </div>
@@ -72,12 +73,12 @@
 
     async function init() {
       try {
-        // OCR設定：完全に「数字」と「計算記号」だけに絞ります。漢字は一切読ませません。
         worker = await Tesseract.createWorker();
-        await worker.loadLanguage('eng'); // 漢字を無視するため英語モードにします
+        await worker.loadLanguage('eng'); 
         await worker.initialize('eng');
         await worker.setParameters({
-          tessedit_char_whitelist: '0123456789+-*/xX= '
+          // 誤認識を防ぐため、数字と基本記号（全角の乗除含む）のみ許可
+          tessedit_char_whitelist: '0123456789+-*/xX×÷＋−= '
         });
         
         document.getElementById('sys-status').textContent = '● スキャン準備完了';
@@ -97,7 +98,7 @@
         isScanning = true;
         document.getElementById('main-btn').classList.add('active');
         document.getElementById('main-btn').textContent = 'ストップ';
-        timer = setInterval(analyzeFormulas, 500);
+        timer = setInterval(analyzeFormulas, 400);
       } else {
         isScanning = false;
         document.getElementById('main-btn').classList.remove('active');
@@ -106,10 +107,15 @@
       }
     }
 
-    // 全角やゲーム特有の記号をプログラムが計算できる形に変換
+    // 表記のブレを「完璧に半角の計算式」に統一する
     function cleanText(str) {
+      if (!str) return "";
+      // 全角数字 -> 半角数字
       let res = str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-      res = res.replace(/x/gi, '*').replace(/X/g, '*'); // 掛け算
+      // 各種掛け算・割り算・引き算記号の統一
+      res = res.replace(/×/g, '*').replace(/x/gi, '*').replace(/X/g, '*');
+      res = res.replace(/÷/g, '/');
+      res = res.replace(/＋/g, '+').replace(/−/g, '-').replace(/₋/g, '-');
       return res;
     }
 
@@ -125,30 +131,29 @@
 
       try {
         const res = await worker.recognize(canvas);
-        let raw = res.data.text.replace(/\s+/g, ""); // スペースを詰める
+        let raw = res.data.text.replace(/\s+/g, ""); // 空白を詰める
+        document.getElementById('raw-log').textContent = "読取データ: " + (raw ? raw : "（空欄）");
+
         let cleaned = cleanText(raw);
 
-        // 数式らしき固まり（数字と計算記号）を抽出
-        let matches = cleaned.match(/([0-9+\-*/]+)/g) || [];
-        // ちゃんと数字が含まれているものだけ残す
-        let validFormulas = matches.filter(f => /[0-9]/.test(f) && f.length >= 1);
+        // 【ここが超強化ポイント】
+        // 1行に繋がってしまっていても、「数字+記号+数字」のパターンを個別に抜き出す
+        // 例: "10*81+73" から ["10*8", "1+73"] を確実に抽出
+        let validFormulas = cleaned.match(/\d+[+\-*/]\d+/g) || [];
 
         if (validFormulas.length >= 2) {
-          // 2つの式が見つかったら、自動でストップして計算結果を表示
+          // 2つ以上の式が抽出できたらその時点でストップして計算
           toggleScan();
 
           let leftForm = validFormulas[0];
           let rightForm = validFormulas[1];
 
-          // 数式の評価（末尾にゴミがついている場合は切り落とす）
-          if (/[+\-*/]$/.test(leftForm)) leftForm = leftForm.slice(0, -1);
-          if (/[+\-*/]$/.test(rightForm)) rightForm = rightForm.slice(0, -1);
+          document.getElementById('formula-left').textContent = leftForm.replace(/\*/g, '×').replace(/\//g, '÷');
+          document.getElementById('formula-right').textContent = rightForm.replace(/\*/g, '×').replace(/\//g, '÷');
 
-          document.getElementById('formula-left').textContent = leftForm;
-          document.getElementById('formula-right').textContent = rightForm;
-
-          let leftAns = eval(leftForm);
-          let rightAns = eval(rightForm);
+          // 安全に計算を実行
+          let leftAns = new Function(`return ${leftForm}`)();
+          let rightAns = new Function(`return ${rightForm}`)();
 
           document.getElementById('answer-left').textContent = Math.round(leftAns);
           document.getElementById('answer-right').textContent = Math.round(rightAns);
@@ -156,7 +161,7 @@
           document.getElementById('box-left').classList.add('detected');
           document.getElementById('box-right').classList.add('detected');
         } else {
-          // 見つからない間は前回のデータをリセットして探し続ける
+          // 見つからない間はリセット
           document.getElementById('formula-left').textContent = '検索中...';
           document.getElementById('formula-right').textContent = '検索中...';
           document.getElementById('answer-left').textContent = '-';
