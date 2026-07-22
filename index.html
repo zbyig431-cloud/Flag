@@ -990,22 +990,26 @@ try {
 
     const resData = await response.json();
 
-    let annotations = [];
+// 元画像OCR（スクショ用）
+const fullAnnotations =
+    resData.responses[0]?.textAnnotations || [];
 
-    if (resData.responses) {
+// 分割OCR（認識用）
+let detectAnnotations = [
+    { description: "" }   // annotations.slice(1) と同じ形にする
+];
 
-        resData.responses.forEach(res => {
+for (let i = 1; i < resData.responses.length; i++) {
 
-            if (res.textAnnotations) {
+    if (resData.responses[i].textAnnotations) {
 
-                annotations.push(...res.textAnnotations);
-
-            }
-
-        });
+        detectAnnotations.push(
+            ...resData.responses[i].textAnnotations.slice(1)
+        );
 
     }
 
+}
     if (annotations.length === 0) {
 
         if (!isContinuous)
@@ -1015,11 +1019,12 @@ try {
     }
     if (mode === "target") {
 
-    await analyzeTargetModeWithAdvancedMatching(
-        annotations,
-        workCanvas,
-        isContinuous
-    );
+await analyzeTargetModeWithAdvancedMatching(
+    fullAnnotations,
+    detectAnnotations,
+    workCanvas,
+    isContinuous
+);
 
 } else {
 
@@ -1041,23 +1046,44 @@ try {
 }
 }
     
-        async function analyzeTargetModeWithAdvancedMatching(annotations, originalCanvas, isContinuous) {
-            const fullList = annotations.slice(1);
-            const numbersList = [];
-            const genericBlocks = [];
+        async function analyzeTargetModeWithAdvancedMatching(
+    fullAnnotations,
+    detectAnnotations,
+    originalCanvas,
+    isContinuous
+) {
+          // 元画像OCR（スクショ用）
+const fullList = fullAnnotations.slice(1);
 
-            fullList.forEach(item => {
+// 分割OCR（認識用）
+const detectList = detectAnnotations;
+
+const numbersList = [];
+const genericBlocks = [];
+            detectList.forEach(item => {
                 const text = item.description.trim();
                 const box = item.boundingPoly.vertices;
-                if (!box || box.length < 4) return;
 
-                // 座標はキャプチャ画像(workCanvas)と同じ全画面座標系なので、
-                // 上下分割の座標補正は不要。
-                const cx = ((box[0]?.x ?? 0) + (box[1]?.x ?? 0) + (box[2]?.x ?? 0) + (box[3]?.x ?? 0)) / 4;
-                const cy = ((box[0]?.y ?? 0) + (box[1]?.y ?? 0) + (box[2]?.y ?? 0) + (box[3]?.y ?? 0)) / 4;
+// 元画像側で同じ数字を探す
+const originalItem = fullList.find(f =>
+    f.description.trim() === text
+);
 
-                const h = Math.max(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0) - Math.min(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0);
-                const w = Math.max(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0) - Math.min(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0);
+if (!originalItem) return;
+
+// スクショは元画像の座標を使う
+const originalBox = originalItem.boundingPoly.vertices;
+
+if (!originalBox || originalBox.length < 4) return;
+
+const cx = ((originalBox[0]?.x ?? 0) + (originalBox[1]?.x ?? 0) + (originalBox[2]?.x ?? 0) + (originalBox[3]?.x ?? 0)) / 4;
+const cy = ((originalBox[0]?.y ?? 0) + (originalBox[1]?.y ?? 0) + (originalBox[2]?.y ?? 0) + (originalBox[3]?.y ?? 0)) / 4;
+
+const h = Math.max(originalBox[0]?.y ?? 0, originalBox[1]?.y ?? 0, originalBox[2]?.y ?? 0, originalBox[3]?.y ?? 0)
+        - Math.min(originalBox[0]?.y ?? 0, originalBox[1]?.y ?? 0, originalBox[2]?.y ?? 0, originalBox[3]?.y ?? 0);
+
+const w = Math.max(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2]?.x ?? 0, originalBox[3]?.x ?? 0)
+        - Math.min(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2]?.x ?? 0, originalBox[3]?.x ?? 0);
 
                 const info = { text, cx, cy, w, h };
 
