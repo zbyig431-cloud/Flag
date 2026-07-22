@@ -850,18 +850,88 @@
             });
         }
 
-        async function syncInputsToFirebase() {
-            const roomId = document.getElementById('room-id').value.trim() || 'default_room';
-            const queries = searchBoxes.map(b => b.value.trim());
-            try { 
-                await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
-            } catch(e) {}
+async function syncInputsToFirebase() {
+
+    ...
+
+}
+
+
+//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+// OCR用画像を分割して返す
+//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+function createSplitCanvases(sourceCanvas) {
+
+    const canvases = [];
+
+    // ① 元画像（全体）
+    canvases.push(sourceCanvas);
+
+    const rows = 2;
+    const cols = 4;
+    const overlap = 0.12;
+
+    const srcW = sourceCanvas.width;
+    const srcH = sourceCanvas.height;
+
+    const tileW = srcW / cols;
+    const tileH = srcH / rows;
+
+    for (let row = 0; row < rows; row++) {
+
+        for (let col = 0; col < cols; col++) {
+
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+
+            const sx = Math.max(
+                0,
+                col * tileW - tileW * overlap
+            );
+
+            const sy = Math.max(
+                0,
+                row * tileH - tileH * overlap
+            );
+
+            const sw = Math.min(
+                srcW - sx,
+                tileW * (1 + overlap * 2)
+            );
+
+            const sh = Math.min(
+                srcH - sy,
+                tileH * (1 + overlap * 2)
+            );
+
+            canvas.width = sw;
+            canvas.height = sh;
+
+            ctx.drawImage(
+                sourceCanvas,
+                sx,
+                sy,
+                sw,
+                sh,
+                0,
+                0,
+                sw,
+                sh
+            );
+
+            canvases.push(canvas);
+
         }
 
-        // 画面全体をそのまま1枚の画像としてVision APIへ送る。
-        // 以前の「半分に割って上下に並べる」手法は、数字が中央で分断されたり
-        // アスペクト比が崩れて認識率が下がる原因になっていたため廃止。
-        async function processCaptureOCR(mode, isContinuous = false) {
+    }
+
+    return canvases;
+
+}
+//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
+
+async function processCaptureOCR(mode, isContinuous = false) {
             const videoEl = document.getElementById('camera-stream');
             const apiKey = document.getElementById('api-key').value.trim();
             if(!localStream || !apiKey) return;
@@ -883,6 +953,9 @@
             const wCtx = workCanvas.getContext('2d');
             wCtx.drawImage(videoEl, 0, 0, srcW, srcH);
 
+　　　　　　const splitCanvases = createSplitCanvases(workCanvas);
+
+　　　　　　console.log(splitCanvases.length);   
             const base64Image = workCanvas.toDataURL('image/jpeg', 0.9).split(',')[1];
             const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
             const requestBody = {
