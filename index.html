@@ -954,36 +954,89 @@ async function processCaptureOCR(mode, isContinuous = false) {
             const wCtx = workCanvas.getContext('2d');
             wCtx.drawImage(videoEl, 0, 0, srcW, srcH);
 
-　　　　　　const splitCanvases = createSplitCanvases(workCanvas);
+  const splitCanvases = createSplitCanvases(workCanvas);
 
-　　　　　　console.log(splitCanvases.length);   
-            const base64Image = workCanvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-            const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
-            const requestBody = {
-                requests: [{
-                    image: { content: base64Image },
-                    features: [{ type: "TEXT_DETECTION" }]
-                }]
-            };
+console.log(splitCanvases.length);
 
-            try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
-                const resData = await response.json();
-                if (!resData.responses || !resData.responses[0] || !resData.responses[0].textAnnotations) {
-                    if (!isContinuous) showToast("NO TEXT DETECTED");
-                    return;
-                }
+const imageList = splitCanvases.map(canvas => {
+    return canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+});
 
-                const annotations = resData.responses[0].textAnnotations;
-                
-                if (mode === "target") {
-                    await analyzeTargetModeWithAdvancedMatching(annotations, workCanvas, isContinuous);
-                } else {
-                    await analyzeQuestionModeAdvanced(annotations);
-                }
-            } catch (err) {
-                if (!isContinuous) showToast("API DETECT ERROR");
+console.log(imageList.length);
+const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
+
+const requestBody = {
+    requests: imageList.map(img => ({
+        image: {
+            content: img
+        },
+        features: [
+            {
+                type: "DOCUMENT_TEXT_DETECTION"
             }
+        ]
+    }))
+};
+
+try {
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestBody)
+    });
+
+    const resData = await response.json();
+
+    let annotations = [];
+
+    if (resData.responses) {
+
+        resData.responses.forEach(res => {
+
+            if (res.textAnnotations) {
+
+                annotations.push(...res.textAnnotations);
+
+            }
+
+        });
+
+    }
+
+    if (annotations.length === 0) {
+
+        if (!isContinuous)
+            showToast("NO TEXT DETECTED");
+
+        return;
+    }
+    if (mode === "target") {
+
+    await analyzeTargetModeWithAdvancedMatching(
+        annotations,
+        workCanvas,
+        isContinuous
+    );
+
+} else {
+
+    await analyzeQuestionModeAdvanced(
+        annotations
+    );
+
+}
+
+} catch (err) {
+
+    console.error(err);
+
+    if (!isContinuous) {
+
+        showToast("API DETECT ERROR");
+
         }
 
         async function analyzeTargetModeWithAdvancedMatching(annotations, originalCanvas, isContinuous) {
@@ -1074,16 +1127,22 @@ async function processCaptureOCR(mode, isContinuous = false) {
                     timestamp: Date.now()
                 };
 
-                if (isContinuous) {
-                    // 同一長押しセッション内で未検出の数字だけを新規ストック。
-                    // 既出の数字は再書き込みせず、API/Firestoreの無駄な消費を防ぐ。
-                    if (continuousSessionNumbers.has(numObj.text)) return;
-                    continuousSessionNumbers.add(numObj.text);
-                    updates[numObj.text] = entry;
-                    newNumbers.push(numObj.text);
-                } else {
-                    updates[numObj.text] = entry;
-                }
+if (isContinuous) {
+
+    if (continuousSessionNumbers.has(numObj.text)) return;
+    continuousSessionNumbers.add(numObj.text);
+
+    const oldData = allPhotosMap[numObj.text];
+
+    if (!oldData) {
+        // 初めて見つけた番号だけ保存
+        updates[numObj.text] = entry;
+        newNumbers.push(numObj.text);
+    }
+
+} else {
+    updates[numObj.text] = entry;
+}
             });
 
             const matchCount = Object.keys(updates).length;
@@ -1192,13 +1251,25 @@ async function processCaptureOCR(mode, isContinuous = false) {
             localStorage.setItem('cyber_room_id', document.getElementById('room-id').value);
             localStorage.setItem('cyber_user_name', document.getElementById('user-name').value);
         }
-        function loadConfig() {
-            document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
-            document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
-            document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
-        }
-        function showToast(msg) {
-            const toast = document.getElementById('toast-log');
+function loadConfig() {
+    document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
+    document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
+    document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
+}
+
+// ★ここから追加★
+function isSameImage(imgA, imgB) {
+
+    if (!imgA || !imgB) return false;
+
+    if (imgA === imgB) return true;
+
+    return false;
+}
+// ★ここまで追加★
+
+function showToast(msg) {
+    const toast = document.getElementById('toast-log');
             toast.innerText = msg; toast.classList.add('show');
             clearTimeout(toast.timeout);
             toast.timeout = setTimeout(() => toast.classList.remove('show'), 2500);
