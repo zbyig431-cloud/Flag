@@ -392,7 +392,7 @@
         <h1>トワもんGemini</h1>
         <div class="member-status-bar">
             <span class="online-dot"></span>
-            <span id="member-list-text">ONLINE: 待機中</span>
+            <span id="member-list-text">ONLINE: 待機中...</span>
         </div>
         <div class="config-box">
             <div>
@@ -497,8 +497,14 @@
 
         // 連続スキャン状態
         let isContinuousScanning = false;
-        let continuousSessionNumbers = new Set();
-        const SCAN_INTERVAL_MS = 1200;
+        let continuousSessionSeen = []; // [{text, cx, cy}] 直前の認識結果（重複判定用）
+        const SCAN_INTERVAL_MS = 1500;
+        const POS_DUP_PX = 60; // この距離以内なら「同じ場所」とみなす
+
+        // タイル分割設定
+        const TILE_COLS = 4;
+        const TILE_ROWS = 2;
+        const TILE_OVERLAP = 0.15;
 
         const setupPhase = document.getElementById('setup-phase');
         const scanPhase = document.getElementById('scan-phase');
@@ -572,7 +578,7 @@
                 return;
             }
             isContinuousScanning = true;
-            continuousSessionNumbers = new Set();
+            continuousSessionSeen = [];
             const btn = document.getElementById('shutter-target');
             btn.classList.add('scanning-active');
             btn.innerText = "スキャン中";
@@ -668,7 +674,7 @@
             }
 
             // 3. facingMode 方式で失敗/不一致の場合、deviceId ベースで全カメラを順次試行。
-            //    一部のiPad/スマホは facingMode 制約を無視するため、これが確実な方法。
+            //    一部のiPad/スマホは facingMode 制約を無視するため、これが確確実な方法。
             if (!newStream) {
                 // パーミッション取得＆ラベル有効化のため一度 { video: true }
                 const permStream = await acquireStream([{ video: true, audio: false }]);
@@ -850,240 +856,87 @@
             });
         }
 
-    async function syncInputsToFirebase() {
-        const roomId = document.getElementById('room-id').value.trim() || 'default_room';
-        const queries = searchBoxes.map(b => b.value.trim());
-        try { 
-            await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
-        } catch(e) {}
-    }
-
-//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-// OCR用画像を分割して返す
-//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-function createSplitCanvases(sourceCanvas) {
-
-    const canvases = [];
-
-    // ① 元画像（全体）
-    canvases.push(sourceCanvas);
-
-    const rows = 2;
-    const cols = 4;
-    const overlap = 0.12;
-
-    const srcW = sourceCanvas.width;
-    const srcH = sourceCanvas.height;
-
-    const tileW = srcW / cols;
-    const tileH = srcH / rows;
-
-    for (let row = 0; row < rows; row++) {
-
-        for (let col = 0; col < cols; col++) {
-
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-
-            const sx = Math.max(
-                0,
-                col * tileW - tileW * overlap
-            );
-
-            const sy = Math.max(
-                0,
-                row * tileH - tileH * overlap
-            );
-
-            const sw = Math.min(
-                srcW - sx,
-                tileW * (1 + overlap * 2)
-            );
-
-            const sh = Math.min(
-                srcH - sy,
-                tileH * (1 + overlap * 2)
-            );
-
-            canvas.width = sw;
-            canvas.height = sh;
-
-            ctx.drawImage(
-                sourceCanvas,
-                sx,
-                sy,
-                sw,
-                sh,
-                0,
-                0,
-                sw,
-                sh
-            );
-
-            canvases.push(canvas);
-
+        async function syncInputsToFirebase() {
+            const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+            const queries = searchBoxes.map(b => b.value.trim());
+            try { 
+                await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
+            } catch(e) {}
         }
 
-    }
+        // ─── タイル画像生成 ───
+        // 元画像(srcW×srcH)を TILE_COLS×TILE_ROWS に分割する。
+        // 境界の数字が分断されないよう、各タイルは隣接タイルと TILE_OVERLAP(15%) だけ重なる。
+        // 戻り値: [{canvas, offsetX, offsetY, tileW, tileH}]
+        function buildTiles(srcW, srcH) {
+            const stepX = srcW / TILE_COLS;
+            const stepY = srcH / TILE_ROWS;
+            const tileW = Math.floor(stepX * (1 + TILE_OVERLAP));
+            const tileH = Math.floor(stepY * (1 + TILE_OVERLAP));
 
-    return canvases;
-
-}
-//★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
-
-async function processCaptureOCR(mode, isContinuous = false) {
+            const srcCanvas = document.getElementById('split-work-canvas');
+            srcCanvas.width = srcW;
+            srcCanvas.height = srcH;
+            const sCtx = srcCanvas.getContext('2d');
             const videoEl = document.getElementById('camera-stream');
-            const apiKey = document.getElementById('api-key').value.trim();
-            if(!localStream || !apiKey) return;
+            sCtx.drawImage(videoEl, 0, 0, srcW, srcH);
 
-            if (!isContinuous) {
-                const indicator = document.getElementById('scan-indicator');
-                indicator.classList.add('active');
-                setTimeout(() => indicator.classList.remove('active'), 120);
-                showToast("SCANNING...");
+            const tiles = [];
+            for (let r = 0; r < TILE_ROWS; r++) {
+                for (let c = 0; c < TILE_COLS; c++) {
+                    const cx = Math.floor(c * stepX + stepX / 2 - tileW / 2);
+                    const cy = Math.floor(r * stepY + stepY / 2 - tileH / 2);
+                    const ox = Math.max(0, Math.min(cx, srcW - tileW));
+                    const oy = Math.max(0, Math.min(cy, srcH - tileH));
+
+                    const tc = document.createElement('canvas');
+                    tc.width = tileW;
+                    tc.height = tileH;
+                    tc.getContext('2d').drawImage(srcCanvas, ox, oy, tileW, tileH, 0, 0, tileW, tileH);
+                    tiles.push({ canvas: tc, offsetX: ox, offsetY: oy, tileW, tileH });
+                }
             }
+            return tiles;
+        }
 
-            const srcW = videoEl.videoWidth;
-            const srcH = videoEl.videoHeight;
-            if (!srcW || !srcH) return;
+        // ─── Vision API 呼び出し ───
+        async function callVisionAPI(apiKey, base64Image) {
+            const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
+            const requestBody = {
+                requests: [{
+                    image: { content: base64Image },
+                    features: [{ type: "TEXT_DETECTION" }]
+                }]
+            };
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            const resData = await response.json();
+            if (!resData.responses || !resData.responses[0] || !resData.responses[0].textAnnotations) return [];
+            return resData.responses[0].textAnnotations;
+        }
 
-            const workCanvas = document.getElementById('split-work-canvas');
-            workCanvas.width = srcW;
-            workCanvas.height = srcH;
-            const wCtx = workCanvas.getContext('2d');
-            wCtx.drawImage(videoEl, 0, 0, srcW, srcH);
+        // annotations から3桁数字と汎用ブロックを抽出。
+        // offset を足して全画面座標系に変換した cx/cy を持つ。
+        function extractAnnotations(annotations, offsetX, offsetY) {
+            const fullList = annotations.slice(1);
+            const numbersList = [];
+            const genericBlocks = [];
 
-  const splitCanvases = createSplitCanvases(workCanvas);
-
-console.log(splitCanvases.length);
-
-const imageList = splitCanvases.map(canvas => {
-    return canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
-});
-
-console.log(imageList.length);
-const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
-
-const requestBody = {
-    requests: imageList.map(img => ({
-        image: {
-            content: img
-        },
-        features: [
-            {
-                type: "DOCUMENT_TEXT_DETECTION"
-            }
-        ]
-    }))
-};
-
-try {
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody)
-    });
-
-    const resData = await response.json();
-
-// 元画像OCR（スクショ用）
-const fullAnnotations =
-    resData.responses[0]?.textAnnotations || [];
-
-// 分割OCR（認識用）
-let detectAnnotations = [
-    { description: "" }   // annotations.slice(1) と同じ形にする
-];
-
-for (let i = 1; i < resData.responses.length; i++) {
-
-    if (resData.responses[i].textAnnotations) {
-
-        detectAnnotations.push(
-            ...resData.responses[i].textAnnotations.slice(1)
-        );
-
-    }
-
-}
-    if (annotations.length === 0) {
-
-        if (!isContinuous)
-            showToast("NO TEXT DETECTED");
-
-        return;
-    }
-    if (mode === "target") {
-
-await analyzeTargetModeWithAdvancedMatching(
-    fullAnnotations,
-    detectAnnotations,
-    workCanvas,
-    isContinuous
-);
-
-} else {
-
-    await analyzeQuestionModeAdvanced(
-        annotations
-    );
-
-}
-
-} catch (err) {
-
-    console.error(err);
-
-    if (!isContinuous) {
-
-        showToast("API DETECT ERROR");
-
-            }
-}
-}
-    
-        async function analyzeTargetModeWithAdvancedMatching(
-    fullAnnotations,
-    detectAnnotations,
-    originalCanvas,
-    isContinuous
-) {
-          // 元画像OCR（スクショ用）
-const fullList = fullAnnotations.slice(1);
-
-// 分割OCR（認識用）
-const detectList = detectAnnotations;
-
-const numbersList = [];
-const genericBlocks = [];
-            detectList.forEach(item => {
+            fullList.forEach(item => {
                 const text = item.description.trim();
                 const box = item.boundingPoly.vertices;
+                if (!box || box.length < 4) return;
 
-// 元画像側で同じ数字を探す
-const originalItem = fullList.find(f =>
-    f.description.trim() === text
-);
+                const localCx = ((box[0]?.x ?? 0) + (box[1]?.x ?? 0) + (box[2]?.x ?? 0) + (box[3]?.x ?? 0)) / 4;
+                const localCy = ((box[0]?.y ?? 0) + (box[1]?.y ?? 0) + (box[2]?.y ?? 0) + (box[3]?.y ?? 0)) / 4;
+                const cx = localCx + offsetX;
+                const cy = localCy + offsetY;
 
-if (!originalItem) return;
-
-// スクショは元画像の座標を使う
-const originalBox = originalItem.boundingPoly.vertices;
-
-if (!originalBox || originalBox.length < 4) return;
-
-const cx = ((originalBox[0]?.x ?? 0) + (originalBox[1]?.x ?? 0) + (originalBox[2]?.x ?? 0) + (originalBox[3]?.x ?? 0)) / 4;
-const cy = ((originalBox[0]?.y ?? 0) + (originalBox[1]?.y ?? 0) + (originalBox[2]?.y ?? 0) + (originalBox[3]?.y ?? 0)) / 4;
-
-const h = Math.max(originalBox[0]?.y ?? 0, originalBox[1]?.y ?? 0, originalBox[2]?.y ?? 0, originalBox[3]?.y ?? 0)
-        - Math.min(originalBox[0]?.y ?? 0, originalBox[1]?.y ?? 0, originalBox[2]?.y ?? 0, originalBox[3]?.y ?? 0);
-
-const w = Math.max(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2]?.x ?? 0, originalBox[3]?.x ?? 0)
-        - Math.min(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2]?.x ?? 0, originalBox[3]?.x ?? 0);
+                const h = Math.max(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0) - Math.min(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0);
+                const w = Math.max(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0) - Math.min(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0);
 
                 const info = { text, cx, cy, w, h };
 
@@ -1094,15 +947,134 @@ const w = Math.max(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2
                 }
             });
 
-            if (numbersList.length === 0) {
+            return { numbersList, genericBlocks };
+        }
+
+        // 同じ数字テキストで位置が近いものはマージして1つにまとめる。
+        function dedupNumbers(allNumbers) {
+            const merged = [];
+            allNumbers.forEach(num => {
+                const existing = merged.find(m =>
+                    m.text === num.text &&
+                    Math.abs(m.cx - num.cx) < POS_DUP_PX &&
+                    Math.abs(m.cy - num.cy) < POS_DUP_PX
+                );
+                if (existing) {
+                    // より大きい（=鮮明な可能性が高い）方を優先
+                    if (num.w * num.h > existing.w * existing.h) {
+                        existing.cx = num.cx; existing.cy = num.cy;
+                        existing.w = num.w; existing.h = num.h;
+                    }
+                } else {
+                    merged.push({ ...num });
+                }
+            });
+            return merged;
+        }
+
+        // ─── メイン撮影・OCR ───
+        // モード "target": 全画面1枚 + 2×4タイル8枚 = 計9枚を並列でAPI送信。
+        //   9枚の結果を統合し、3桁数字を抽出してストック。
+        //   連続スキャン時は「直前のスキャンと同じ位置の同じ数字」を重複排除。
+        // モード "question": 全画面1枚のみで数字を抽出しスロットに自動入力。
+        async function processCaptureOCR(mode, isContinuous = false) {
+            const videoEl = document.getElementById('camera-stream');
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (!localStream || !apiKey) return;
+
+            const srcW = videoEl.videoWidth;
+            const srcH = videoEl.videoHeight;
+            if (!srcW || !srcH) return;
+
+            if (!isContinuous) {
+                const indicator = document.getElementById('scan-indicator');
+                indicator.classList.add('active');
+                setTimeout(() => indicator.classList.remove('active'), 120);
+                showToast("SCANNING...");
+            }
+
+            // 全画面キャプチャ
+            const fullCanvas = document.getElementById('split-work-canvas');
+            fullCanvas.width = srcW;
+            fullCanvas.height = srcH;
+            fullCanvas.getContext('2d').drawImage(videoEl, 0, 0, srcW, srcH);
+            const fullBase64 = fullCanvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+
+            if (mode === "question") {
+                // 問題撮影モード: 全画面1枚のみで高速処理
+                try {
+                    const annotations = await callVisionAPI(apiKey, fullBase64);
+                    await analyzeQuestionModeAdvanced(annotations);
+                } catch (err) {
+                    if (!isContinuous) showToast("API DETECT ERROR");
+                }
+                return;
+            }
+
+            // ── target モード: 9枚並列スキャン ──
+            const tiles = buildTiles(srcW, srcH);
+
+            const fullPromise = callVisionAPI(apiKey, fullBase64);
+            const tilePromises = tiles.map(t =>
+                callVisionAPI(apiKey, t.canvas.toDataURL('image/jpeg', 0.9).split(',')[1])
+            );
+
+            let allResults;
+            try {
+                allResults = await Promise.all([fullPromise, ...tilePromises]);
+            } catch (err) {
+                if (!isContinuous) showToast("API DETECT ERROR");
+                return;
+            }
+
+            // 全結果を統合
+            let allNumbers = [];
+            let allGeneric = [];
+
+            // 全画面（offset 0,0）
+            {
+                const { numbersList, genericBlocks } = extractAnnotations(allResults[0], 0, 0);
+                allNumbers = allNumbers.concat(numbersList);
+                allGeneric = allGeneric.concat(genericBlocks);
+            }
+            // 8タイル
+            for (let i = 0; i < tiles.length; i++) {
+                const t = tiles[i];
+                const { numbersList, genericBlocks } = extractAnnotations(allResults[i + 1], t.offsetX, t.offsetY);
+                allNumbers = allNumbers.concat(numbersList);
+                allGeneric = allGeneric.concat(genericBlocks);
+            }
+
+            // 重複マージ（同じ数字・同じ位置）
+            const mergedNumbers = dedupNumbers(allNumbers);
+
+            if (mergedNumbers.length === 0) {
                 if (!isContinuous) showToast("NO 3-DIGIT TARGETS");
                 return;
             }
 
+            await analyzeTargetModeWithAdvancedMatching(mergedNumbers, allGeneric, fullCanvas, isContinuous);
+        }
+
+        // 3パターンのスクショを生成してストック。
+        // numbersList/genericBlocks は全画面座標系の cx/cy を持つ。
+        // originalCanvas は全画面キャプチャ。
+        async function analyzeTargetModeWithAdvancedMatching(numbersList, genericBlocks, originalCanvas, isContinuous) {
             const updates = {};
             const newNumbers = [];
 
             numbersList.forEach(numObj => {
+                // 連続スキャン時: 直前のスキャンと「同じ数字+同じ位置」ならスキップ
+                if (isContinuous) {
+                    const wasSeen = continuousSessionSeen.some(s =>
+                        s.text === numObj.text &&
+                        Math.abs(s.cx - numObj.cx) < POS_DUP_PX &&
+                        Math.abs(s.cy - numObj.cy) < POS_DUP_PX
+                    );
+                    if (wasSeen) return;
+                }
+
+                // 数字の下にある汎用ブロック（漢字など）を探す
                 const verticalCandidates = genericBlocks.filter(b => {
                     const xDiff = Math.abs(numObj.cx - b.cx);
                     const yDiff = b.cy - numObj.cy;
@@ -1128,50 +1100,45 @@ const w = Math.max(originalBox[0]?.x ?? 0, originalBox[1]?.x ?? 0, originalBox[2
                 cropCanvas.width = 120; cropCanvas.height = 160;
                 const cCtx = cropCanvas.getContext('2d');
 
+                // パターン1: 標準
                 const cropX1 = Math.max(0, centerCx - (standardCropW / 2));
                 const cropY1 = Math.max(0, centerCy - (standardCropH / 2));
-                cCtx.clearRect(0,0,120,160);
+                cCtx.clearRect(0, 0, 120, 160);
                 cCtx.drawImage(originalCanvas, cropX1, cropY1, standardCropW, standardCropH, 0, 0, 120, 160);
                 const img1 = cropCanvas.toDataURL('image/jpeg', 0.65);
 
+                // パターン2: ワイド
                 const wideCropW = standardCropW * 1.25;
                 const wideCropH = standardCropH * 1.25;
                 const cropX2 = Math.max(0, centerCx - (wideCropW / 2));
                 const cropY2 = Math.max(0, centerCy - (wideCropH / 2));
-                cCtx.clearRect(0,0,120,160);
+                cCtx.clearRect(0, 0, 120, 160);
                 cCtx.drawImage(originalCanvas, cropX2, cropY2, wideCropW, wideCropH, 0, 0, 120, 160);
                 const img2 = cropCanvas.toDataURL('image/jpeg', 0.65);
 
+                // パターン3: ズーム
                 const zoomCropW = standardCropW * 0.75;
                 const zoomCropH = standardCropH * 0.75;
                 const cropX3 = Math.max(0, centerCx - (zoomCropW / 2));
                 const cropY3 = Math.max(0, centerCy - (zoomCropH / 2));
-                cCtx.clearRect(0,0,120,160);
+                cCtx.clearRect(0, 0, 120, 160);
                 cCtx.drawImage(originalCanvas, cropX3, cropY3, zoomCropW, zoomCropH, 0, 0, 120, 160);
                 const img3 = cropCanvas.toDataURL('image/jpeg', 0.65);
 
-                const entry = {
+                updates[numObj.text] = {
                     croppedImgs: [img1, img2, img3],
                     timestamp: Date.now()
                 };
 
-if (isContinuous) {
-
-    if (continuousSessionNumbers.has(numObj.text)) return;
-    continuousSessionNumbers.add(numObj.text);
-
-    const oldData = allPhotosMap[numObj.text];
-
-    if (!oldData) {
-        // 初めて見つけた番号だけ保存
-        updates[numObj.text] = entry;
-        newNumbers.push(numObj.text);
-    }
-
-} else {
-    updates[numObj.text] = entry;
-}
+                if (isContinuous) {
+                    newNumbers.push(numObj.text);
+                }
             });
+
+            // 連続スキャン: 今回認識した全数字を「直前の結果」として記憶（次回の重複判定用）
+            if (isContinuous) {
+                continuousSessionSeen = numbersList.map(n => ({ text: n.text, cx: n.cx, cy: n.cy }));
+            }
 
             const matchCount = Object.keys(updates).length;
             if (matchCount > 0) {
@@ -1211,7 +1178,7 @@ if (isContinuous) {
 
             if (foundNumbers.length >= 1) {
                 const limit = Math.min(foundNumbers.length, 5);
-                for(let i = 0; i < limit; i++) { searchBoxes[i].value = foundNumbers[i].text; }
+                for (let i = 0; i < limit; i++) { searchBoxes[i].value = foundNumbers[i].text; }
                 showToast(`QUEST AUTOFILL: ${limit} SLOTS`);
                 syncInputsToFirebase();
                 executeSearch();
@@ -1279,25 +1246,13 @@ if (isContinuous) {
             localStorage.setItem('cyber_room_id', document.getElementById('room-id').value);
             localStorage.setItem('cyber_user_name', document.getElementById('user-name').value);
         }
-function loadConfig() {
-    document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
-    document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
-    document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
-}
-
-// ★ここから追加★
-function isSameImage(imgA, imgB) {
-
-    if (!imgA || !imgB) return false;
-
-    if (imgA === imgB) return true;
-
-    return false;
-}
-// ★ここまで追加★
-
-function showToast(msg) {
-    const toast = document.getElementById('toast-log');
+        function loadConfig() {
+            document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
+            document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
+            document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
+        }
+        function showToast(msg) {
+            const toast = document.getElementById('toast-log');
             toast.innerText = msg; toast.classList.add('show');
             clearTimeout(toast.timeout);
             toast.timeout = setTimeout(() => toast.classList.remove('show'), 2500);
