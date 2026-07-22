@@ -392,7 +392,7 @@
         <h1>トワもんGemini</h1>
         <div class="member-status-bar">
             <span class="online-dot"></span>
-            <span id="member-list-text">ONLINE: 待機中...</span>
+            <span id="member-list-text">ONLINE: 待機中</span>
         </div>
         <div class="config-box">
             <div>
@@ -850,12 +850,13 @@
             });
         }
 
-async function syncInputsToFirebase() {
-
-    ...
-
-}
-
+    async function syncInputsToFirebase() {
+        const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+        const queries = searchBoxes.map(b => b.value.trim());
+        try { 
+            await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
+        } catch(e) {}
+    }
 
 //★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 // OCR用画像を分割して返す
