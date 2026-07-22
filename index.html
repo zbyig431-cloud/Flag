@@ -1,209 +1,1134 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>1式集中・文字枠付きスキャンツール</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.0.1/tesseract.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-    body { background-color: #020b14; color: #ffffff; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>N.MトワもんGemini</title>
+    <!-- Firebase SDK (v10) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+        }
+      }
+    </script>
+    <style>
+        :root {
+            --bg-dark: #0a0e14;
+            --cyber-blue: #00e5ff;
+            --cyber-green: #39ff14;
+            --cyber-purple: #b57cff;
+            --cyber-red: #ff3333;
+            --cyber-orange: #ff9100;
+            --panel-bg: rgba(16, 23, 33, 0.95);
+            --panel-border: rgba(0, 229, 255, 0.2);
+        }
 
-    /* カメラと認識枠を重ねるエリア */
-    .camera-container { position: relative; width: 100%; height: 60vh; background: #000; }
-    #camera-video { width: 100%; height: 100%; object-fit: cover; }
-    
-    /* カメラの上に重なって、認識した数字を四角く囲むキャンバス */
-    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    
-    #sys-status { position: absolute; top: 10px; left: 10px; padding: 6px 12px; background: rgba(0,0,0,0.8); border-radius: 4px; font-size: 0.8rem; border: 1px solid #00d2ff; z-index: 10; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace, "Helvetica Neue", Arial, sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
 
-    /* 下半分：結果表示 */
-    .control-panel { height: 40vh; background: #0a192f; border-top: 3px solid #00d2ff; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-    
-    .btn-area { width: 100%; height: 50px; }
-    .scan-btn { width: 100%; height: 100%; background: #007bff; border: 2px solid #fff; border-radius: 8px; color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; }
-    .scan-btn.active { background: #dc3545; }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-dark);
+            color: #e0e6ed;
+            overflow: hidden;
+        }
 
-    .result-view { flex: 1; background: rgba(0,0,0,0.5); border: 2px solid #334e68; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; }
-    .result-view.detected { border-color: #00ffcc; background: rgba(0, 255, 204, 0.05); }
+        input[type="text"], input[type="password"], input[type="tel"] {
+            background: rgba(7, 13, 22, 0.9);
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+        }
+        input:focus {
+            border-color: var(--cyber-blue);
+        }
 
-    .formula-display { font-size: 1.6rem; color: #ffcc00; font-family: monospace; font-weight: bold; }
-    .answer-display { font-size: 3.5rem; font-weight: bold; color: #00ffcc; margin-top: 5px; text-shadow: 0 0 10px rgba(0,255,204,0.4); }
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-    #hidden-canvas { display: none; }
-  </style>
+        /* PHASE 1: 設定画面 */
+        #setup-phase {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1 {
+            font-size: 20px;
+            text-align: center;
+            color: var(--cyber-blue);
+            text-shadow: 0 0 10px rgba(0,229,255,0.5);
+            padding: 10px 0;
+            border-bottom: 2px dashed var(--panel-border);
+        }
+
+        .member-status-bar {
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .online-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--cyber-green);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--cyber-green);
+        }
+
+        .config-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 15px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .config-box label {
+            font-size: 12px;
+            color: #8cc8ff;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .btn-start-scan {
+            background: linear-gradient(135deg, #0077ff, var(--cyber-blue));
+            color: #fff;
+            padding: 16px;
+            font-size: 18px;
+            box-shadow: 0 0 15px rgba(0,229,255,0.4);
+        }
+
+        .btn-reset-system {
+            background: rgba(255, 51, 51, 0.1);
+            border: 1px solid var(--cyber-red);
+            color: var(--cyber-red);
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        /* PHASE 2: 横画面HUD */
+        #scan-phase {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-dark);
+            display: none;
+            z-index: 1000;
+            grid-template-columns: 1fr 300px;
+        }
+
+        .hud-left {
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #05080c;
+        }
+
+.finder-container {
+    width: 100%;
+    flex: 1;
+    max-height: 75vh;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#camera-stream {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+        .hud-left-bottom-controls {
+            height: 60px;
+            background: rgba(10, 14, 20, 0.95);
+            border-top: 1px solid rgba(0, 229, 255, 0.3);
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            gap: 10px;
+        }
+
+        .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
+            height: 42px;
+            padding: 0 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .btn-exit-icon {
+            background: rgba(255, 51, 51, 0.1);
+            border: 1px solid var(--cyber-red);
+            color: var(--cyber-red);
+        }
+        .btn-exit-icon:active { background: var(--cyber-red); color: #fff; }
+
+        .btn-zoom-toggle {
+            background: rgba(0, 229, 255, 0.1);
+            border: 1px solid var(--cyber-blue);
+            color: var(--cyber-blue);
+        }
+        .btn-zoom-toggle:active { background: var(--cyber-blue); color: #000; }
+
+        .btn-camera-toggle {
+            background: rgba(181, 124, 255, 0.1);
+            border: 1px solid var(--cyber-purple);
+            color: var(--cyber-purple);
+        }
+        .btn-camera-toggle:active { background: var(--cyber-purple); color: #000; }
+
+        .btn-clear-slots {
+            background: rgba(255, 145, 0, 0.1);
+            border: 1px solid var(--cyber-orange);
+            color: var(--cyber-orange);
+            margin-left: auto;
+        }
+        .btn-clear-slots:active { background: var(--cyber-orange); color: #000; }
+
+        .hud-right {
+            grid-column: 2;
+            background: #0a0e14;
+            border-left: 2px solid rgba(0, 229, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            padding: 6px;
+            gap: 6px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .hud-panel-title {
+            font-size: 10px;
+            color: #8cc8ff;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 2px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .hud-slot-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .hud-slot-row {
+            display: flex;
+            align-items: center;
+            background: rgba(20, 30, 45, 0.6);
+            border: 1px solid rgba(140, 200, 255, 0.2);
+            border-radius: 4px;
+            padding: 3px;
+            gap: 6px;
+            height: 52px;
+        }
+        .hud-slot-row.has-error { border-color: rgba(255, 51, 51, 0.4); background: rgba(255,0,0,0.05); }
+        
+        .hud-slot-row input {
+            width: 44px;
+            height: 32px;
+            padding: 2px;
+            font-size: 15px;
+            font-weight: bold;
+            text-align: center;
+            background: #000;
+            border-color: rgba(0,229,255,0.4);
+            color: var(--cyber-blue);
+        }
+        
+        .hud-slot-ans-zone {
+            flex: 1;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            border-radius: 3px;
+            overflow: hidden;
+            display: flex !important;
+            justify-content: space-around;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.08);
+            position: relative;
+            cursor: pointer;
+            gap: 3px;
+            padding: 2px;
+        }
+        .hud-slot-ans-zone img {
+            width: 31% !important;
+            height: auto !important;
+            max-height: 100% !important;
+            object-fit: contain;
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: 3px;
+        }
+        .hud-slot-ans-zone .no-img-text { font-size: 10px; color: #445566; font-weight: bold; margin: auto; }
+        .hud-slot-ans-zone .err-text { font-size: 10px; color: var(--cyber-red); font-weight: bold; margin: auto; }
+        
+        .pattern-badge {
+            display: none !important;
+        }
+
+        .hud-control-bottom {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .stocks-counter { font-size: 9px; color: #8cc8ff; font-weight: bold; text-align: center; }
+
+        .shutter-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .shutter-grid button { touch-action: none; }
+
+        .btn-shutter-target {
+            padding: 10px 0;
+            border-radius: 6px;
+            background: linear-gradient(180deg, #ffffff 0%, #b5e9ff 100%);
+            border: 2px solid var(--cyber-blue);
+            color: #050b14;
+            font-size: 12px;
+            font-weight: 900;
+            box-shadow: 0 0 10px rgba(0,229,255,0.2);
+        }
+        .btn-shutter-target:active { background: var(--cyber-blue); color: #fff; transform: scale(0.95); }
+
+        .btn-shutter-target.scanning-active {
+            background: linear-gradient(180deg, #ff9100 0%, #ff3333 100%);
+            border-color: var(--cyber-orange);
+            color: #fff;
+            animation: scan-pulse 0.9s infinite;
+        }
+        @keyframes scan-pulse {
+            0%, 100% { box-shadow: 0 0 8px rgba(255,145,0,0.5); transform: scale(1); }
+            50% { box-shadow: 0 0 22px rgba(255,145,0,1); transform: scale(0.97); }
+        }
+
+        .btn-shutter-quest {
+            padding: 10px 0;
+            border-radius: 6px;
+            background: linear-gradient(180deg, #ffffff 0%, #e2c6ff 100%);
+            border: 2px solid var(--cyber-purple);
+            color: #050b14;
+            font-size: 12px;
+            font-weight: 900;
+            box-shadow: 0 0 10px rgba(181,124,255,0.2);
+        }
+        .btn-shutter-quest:active { background: var(--cyber-purple); color: #fff; transform: scale(0.95); }
+        
+        .scan-dimmer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 229, 255, 0.2); opacity: 0; pointer-events: none; z-index: 5;
+            transition: opacity 0.1s;
+        }
+        .scan-dimmer.active { opacity: 1; }
+
+        .toast-log {
+            position: absolute; left: 20px; bottom: 80px; background: rgba(0,0,0,0.85);
+            border-left: 3px solid var(--cyber-blue); padding: 8px 14px; font-size: 11px;
+            z-index: 20; pointer-events: none; opacity: 0; transition: all 0.2s;
+        }
+        .toast-log.show { opacity: 1; }
+
+        .camera-crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 30px; height: 30px; pointer-events: none; opacity: 0.3;
+        }
+        .camera-crosshair::before, .camera-crosshair::after { content: ''; position: absolute; background: white; }
+        .camera-crosshair::before { top: 14px; left: 0; width: 30px; height: 2px; }
+        .camera-crosshair::after { left: 14px; top: 0; width: 2px; height: 30px; }
+    </style>
 </head>
 <body>
 
-  <div class="camera-container">
-    <div id="sys-status" style="color: yellow;">AI起動中...</div>
-    <video id="camera-video" autoplay playsinline muted></video>
-    <!-- ここに認識した文字の「赤い枠」をリアルタイム描写します -->
-    <canvas id="overlay-canvas"></canvas>
-  </div>
-
-  <div class="control-panel">
-    <div class="btn-area">
-      <button class="scan-btn" id="main-btn" onclick="toggleScan()" disabled>1式スキャン開始</button>
+    <!-- PHASE 1: 設定画面 -->
+    <div id="setup-phase">
+        <h1>トワもんGemini</h1>
+        <div class="member-status-bar">
+            <span class="online-dot"></span>
+            <span id="member-list-text">ONLINE: 待機中...</span>
+        </div>
+        <div class="config-box">
+            <div>
+                <label>ROOM ID:</label>
+                <input type="text" id="room-id" placeholder="team1">
+            </div>
+            <div>
+                <label>PLAYER NAME:</label>
+                <input type="text" id="user-name" placeholder="プレイヤー名">
+            </div>
+            <div>
+                <label>PASS WORD:</label>
+                <input type="password" id="api-key" placeholder="AIzaSy...">
+            </div>
+        </div>
+        <div class="action-grid">
+            <button class="btn-start-scan" id="btn-enter-scan">スキャンモード</button>
+            <button class="btn-reset-system" id="btn-reset-all">ルームリセット</button>
+        </div>
     </div>
 
-    <div class="result-view" id="result-box">
-      <div class="formula-display" id="form-out">式を探しています...</div>
-      <div class="answer-display" id="ans-out">-</div>
-    </div>
-  </div>
+    <!-- PHASE 2: 横画面スキャンHUD -->
+    <div id="scan-phase">
+        <div class="hud-left">
+            <div class="finder-container">
+                <video id="camera-stream" autoplay playsinline muted></video>
+                <div class="camera-crosshair"></div>
+                <div class="scan-dimmer" id="scan-indicator"></div>
+            </div>
 
-  <canvas id="hidden-canvas"></canvas>
+            <div class="hud-left-bottom-controls">
+                <button class="btn-exit-icon" id="btn-exit-scan">ホームへ</button>
+                <button class="btn-zoom-toggle" id="btn-toggle-lens">1.0/0.5</button>
+                <button class="btn-camera-toggle" id="btn-toggle-facing">外カメ</button>
+                <button class="btn-clear-slots" id="btn-clear-slots">クリア</button>
+            </div>
+        </div>
 
-  <script>
-    let isScanning = false;
-    let timer = null;
-    let worker = null;
-
-    async function init() {
-      try {
-        worker = await Tesseract.createWorker();
-        await worker.loadLanguage('eng'); 
-        await worker.initialize('eng');
-        await worker.setParameters({
-          tessedit_char_whitelist: '0123456789+-*/xX×÷＋−= '
-        });
-        
-        document.getElementById('sys-status').textContent = '● 枠表示モード準備完了';
-        document.getElementById('sys-status').style.color = '#00ffcc';
-        document.getElementById('main-btn').disabled = false;
-
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-        document.getElementById('camera-video').srcObject = stream;
-        
-        // カメラ映像のサイズが確定したらオーバーレイ用キャンバスのサイズを合わせる
-        document.getElementById('camera-video').onloadedmetadata = () => {
-          adjustCanvasSize();
-        };
-      } catch (e) {
-        document.getElementById('sys-status').textContent = '❌ 起動エラー';
-        document.getElementById('sys-status').style.color = '#ff3366';
-      }
-    }
-
-    function adjustCanvasSize() {
-      const video = document.getElementById('camera-video');
-      const overlay = document.getElementById('overlay-canvas');
-      overlay.width = video.clientWidth;
-      overlay.height = video.clientHeight;
-    }
-
-    window.addEventListener('resize', adjustCanvasSize);
-
-    function toggleScan() {
-      if (!isScanning) {
-        isScanning = true;
-        document.getElementById('main-btn').classList.add('active');
-        document.getElementById('main-btn').textContent = 'ストップ';
-        timer = setInterval(analyzeSingleFormula, 300);
-      } else {
-        isScanning = false;
-        document.getElementById('main-btn').classList.remove('active');
-        document.getElementById('main-btn').textContent = '1式スキャン開始';
-        clearInterval(timer);
-        clearOverlay();
-      }
-    }
-
-    function clearOverlay() {
-      const overlay = document.getElementById('overlay-canvas');
-      const ctx = overlay.getContext('2d');
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-    }
-
-    function cleanText(str) {
-      if (!str) return "";
-      let res = str.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-      res = res.replace(/×/g, '*').replace(/x/gi, '*').replace(/X/g, '*');
-      res = res.replace(/÷/g, '/').replace(/＋/g, '+').replace(/−/g, '-');
-      return res;
-    }
-
-    async function analyzeSingleFormula() {
-      const video = document.getElementById('camera-video');
-      if (!video.srcObject || video.readyState < 2) return;
-
-      const hidden = document.getElementById('hidden-canvas');
-      const hCtx = hidden.getContext('2d');
-      hidden.width = video.videoWidth;
-      hidden.height = video.videoHeight;
-      hCtx.drawImage(video, 0, 0, hidden.width, hidden.height);
-
-      const overlay = document.getElementById('overlay-canvas');
-      const oCtx = overlay.getContext('2d');
-
-      try {
-        // 【ここがポイント】文字の位置データ（blocks, lines, words, symbols）まで全部取得するモード
-        const result = await worker.recognize(hidden);
-        
-        // まず描画をリセット
-        oCtx.clearRect(0, 0, overlay.width, overlay.height);
-
-        // カメラ実写サイズと、ブラウザ表示画面サイズとの比率を計算（枠を正しい位置にズラさないための計算）
-        const scaleX = overlay.width / hidden.width;
-        const scaleY = overlay.height / hidden.height;
-
-        // 【視覚化ロジック】AIが認識した「個々の文字・単語」の座標をループで回して、カメラの上に赤い四角を描く！
-        const words = result.data.words;
-        words.forEach(word => {
-          // 数字か記号が含まれている枠だけを光らせる
-          if (/[0-9+\-*/xX×÷＋−]/.test(word.text)) {
-            const box = word.bbox; // 文字を囲む四角の座標 {x0, y0, x1, y1}
+        <div class="hud-right">
+            <div class="hud-panel-title">スクショが表示されます</div>
             
-            oCtx.strokeStyle = '#ff3366'; // 認識した文字を赤い枠で囲む
-            oCtx.lineWidth = 3;
-            oCtx.strokeRect(
-              box.x0 * scaleX, 
-              box.y0 * scaleY, 
-              (box.x1 - box.x0) * scaleX, 
-              (box.y1 - box.y0) * scaleY
-            );
+            <div class="hud-slot-list">
+                <div class="hud-slot-row" id="row-0">
+                    <input type="tel" id="box-0" placeholder="01" maxlength="3">
+                    <div class="hud-slot-ans-zone" id="zone-0" data-index="0"><span class="no-img-text">VOID</span></div>
+                </div>
+                <div class="hud-slot-row" id="row-1">
+                    <input type="tel" id="box-1" placeholder="02" maxlength="3">
+                    <div class="hud-slot-ans-zone" id="zone-1" data-index="1"><span class="no-img-text">VOID</span></div>
+                </div>
+                <div class="hud-slot-row" id="row-2">
+                    <input type="tel" id="box-2" placeholder="03" maxlength="3">
+                    <div class="hud-slot-ans-zone" id="zone-2" data-index="2"><span class="no-img-text">VOID</span></div>
+                </div>
+                <div class="hud-slot-row" id="row-3">
+                    <input type="tel" id="box-3" placeholder="04" maxlength="3">
+                    <div class="hud-slot-ans-zone" id="zone-3" data-index="3"><span class="no-img-text">VOID</span></div>
+                </div>
+                <div class="hud-slot-row" id="row-4">
+                    <input type="tel" id="box-4" placeholder="05" maxlength="3">
+                    <div class="hud-slot-ans-zone" id="zone-4" data-index="4"><span class="no-img-text">VOID</span></div>
+                </div>
+            </div>
 
-            // 認識した文字の答えを小さく上に表示
-            oCtx.fillStyle = '#ff3366';
-            oCtx.font = '14px sans-serif';
-            oCtx.fillText(word.text, box.x0 * scaleX, (box.y0 * scaleY) - 5);
-          }
+            <div class="hud-control-bottom">
+                <div class="stocks-counter" id="db-counter">STOCKS: 0</div>
+                <div class="shutter-grid">
+                    <button class="btn-shutter-target" id="shutter-target">スキャン長押し</button>
+                    <button class="btn-shutter-quest" id="shutter-quest">問題撮影</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="toast-log" id="toast-log">SCANNING...</div>
+    </div>
+
+    <canvas id="split-work-canvas" style="display:none;"></canvas>
+    <script type="module">
+        import { initializeApp } from "firebase/app";
+        import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAqjlpWIPNCQVJqVnl_M4Orm3gZrnCULfM",
+            authDomain: "tmon-gemini.firebaseapp.com",
+            projectId: "tmon-gemini",
+            storageBucket: "tmon-gemini.firebasestorage.app",
+            messagingSenderId: "90913647133",
+            appId: "1:90913647133:web:10185c7981f69e10f95c34"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let localStream = null;
+        let allPhotosMap = {}; 
+        let unsubscribeRoom = null;
+        let presenceInterval = null;
+        let isUltraWideMode = true; 
+        let isFrontCamera = false;
+
+        let slotPatternIndexes = [0, 0, 0, 0, 0];
+
+        // 連続スキャン状態
+        let isContinuousScanning = false;
+        let continuousSessionNumbers = new Set();
+        const SCAN_INTERVAL_MS = 1200;
+
+        const setupPhase = document.getElementById('setup-phase');
+        const scanPhase = document.getElementById('scan-phase');
+        const searchBoxes = [
+            document.getElementById('box-0'), document.getElementById('box-1'),
+            document.getElementById('box-2'), document.getElementById('box-3'),
+            document.getElementById('box-4')
+        ];
+        const ansZones = [
+            document.getElementById('zone-0'), document.getElementById('zone-1'),
+            document.getElementById('zone-2'), document.getElementById('zone-3'),
+            document.getElementById('zone-4')
+        ];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            initEventListeners();
         });
 
-        // 【計算ロジック】全体の文字列から、最初に見つかった「1つの数式」だけを引っこ抜く
-        let raw = result.data.text.replace(/\s+/g, "");
-        let cleaned = cleanText(raw);
-        
-        // 「数字 ➔ 記号 ➔ 数字」のセットを1つだけ探す
-        let match = cleaned.match(/\d+[+\-*/]\d+/);
+        function initEventListeners() {
+            document.getElementById('btn-enter-scan').addEventListener('click', () => { isUltraWideMode = true; isFrontCamera = false; updateFacingButtonLabel(); startCameraEngine(); });
+            document.getElementById('btn-exit-scan').addEventListener('click', exitScanMode);
+            document.getElementById('btn-reset-all').addEventListener('click', resetSystem);
+            document.getElementById('btn-toggle-lens').addEventListener('click', toggleCameraLens);
+            document.getElementById('btn-toggle-facing').addEventListener('click', toggleFacingCamera);
+            document.getElementById('btn-clear-slots').addEventListener('click', clearAllSlots);
 
-        if (match) {
-          let formula = match[0];
-          
-          // 画面表示用に綺麗に整える
-          document.getElementById('form-out').textContent = formula.replace(/\*/g, '×').replace(/\//g, '÷') + " ＝";
-          
-          // 計算
-          let ans = new Function(`return ${formula}`)();
-          document.getElementById('ans-out').textContent = Math.round(ans);
-          document.getElementById('result-box').classList.add('detected');
-          
-          // 1つの式が解けたら自動ストップ
-          toggleScan();
-        } else {
-          document.getElementById('form-out').textContent = '式を探しています...';
-          document.getElementById('ans-out').textContent = '-';
-          document.getElementById('result-box').classList.remove('detected');
+            // スキャン：長押しで連続スキャン。離すと停止。
+            const shutterTarget = document.getElementById('shutter-target');
+            shutterTarget.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                try { shutterTarget.setPointerCapture(e.pointerId); } catch (_) {}
+                startContinuousScan();
+            });
+            shutterTarget.addEventListener('pointerup', stopContinuousScan);
+            shutterTarget.addEventListener('pointercancel', stopContinuousScan);
+            shutterTarget.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // 問題撮影：タップで1回撮影
+            document.getElementById('shutter-quest').addEventListener('click', () => processCaptureOCR("question"));
+
+            ['room-id', 'user-name', 'api-key'].forEach(id => {
+                document.getElementById(id).addEventListener('input', saveConfig);
+            });
+
+            searchBoxes.forEach((box) => {
+                box.addEventListener('input', () => {
+                    syncInputsToFirebase();
+                    executeSearch();
+                });
+            });
+
+            ansZones.forEach((zone, idx) => {
+                zone.addEventListener('click', () => {
+                    const query = searchBoxes[idx].value.trim();
+                    if (!query || !allPhotosMap[query]) return;
+                    
+                    const imgList = allPhotosMap[query].croppedImgs || [];
+                    if (imgList.length <= 1) return;
+
+                    slotPatternIndexes[idx] = (slotPatternIndexes[idx] + 1) % imgList.length;
+                    executeSearch();
+                });
+            });
         }
 
-      } catch (e) {
-        console.error(e);
-      }
-    }
+        function startContinuousScan() {
+            if (isContinuousScanning) return;
+            if (!localStream || !document.getElementById('api-key').value.trim()) {
+                showToast("CAMERA OR KEY MISSING");
+                return;
+            }
+            isContinuousScanning = true;
+            continuousSessionNumbers = new Set();
+            const btn = document.getElementById('shutter-target');
+            btn.classList.add('scanning-active');
+            btn.innerText = "スキャン中";
+            showToast("連続スキャン開始 (長押し中)");
+            continuousScanLoop();
+        }
 
-    init();
-  </script>
+        async function continuousScanLoop() {
+            while (isContinuousScanning) {
+                await processCaptureOCR("target", true);
+                if (!isContinuousScanning) break;
+                await new Promise(r => setTimeout(r, SCAN_INTERVAL_MS));
+            }
+        }
+
+        function stopContinuousScan() {
+            if (!isContinuousScanning) return;
+            isContinuousScanning = false;
+            const btn = document.getElementById('shutter-target');
+            btn.classList.remove('scanning-active');
+            btn.innerText = "スキャン長押し";
+            showToast("連続スキャン停止");
+        }
+
+        function clearAllSlots() {
+            searchBoxes.forEach(box => box.value = "");
+            slotPatternIndexes = [0, 0, 0, 0, 0];
+            syncInputsToFirebase();
+            executeSearch();
+            showToast("SLOTS CLEARED");
+        }
+
+        // 段階的に制約を緩めてカメラを取得するヘルパー。失敗時は null を返す。
+        async function acquireStream(constraintList) {
+            for (let i = 0; i < constraintList.length; i++) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia(constraintList[i]);
+                    return stream;
+                } catch (err) {
+                    // 次の緩い制約へ
+                }
+            }
+            return null;
+        }
+
+        // facingMode が信頼できない端末向けに、取得したトラックの設定から
+        // 前/後面カメラを判定する。track.getSettings().facingMode とラベルの両方を確認。
+        function isTrackFacing(track, want) {
+            try {
+                const s = track.getSettings() || {};
+                const label = (track.label || s.label || '').toLowerCase();
+                if (want === 'environment') {
+                    if (s.facingMode === 'environment') return true;
+                    if (/back|rear|environment|背面|外/.test(label)) return true;
+                    return false;
+                } else {
+                    if (s.facingMode === 'user') return true;
+                    if (/front|user|前面|内|face/.test(label)) return true;
+                    return false;
+                }
+            } catch (e) { return false; }
+        }
+
+        async function startCameraEngine() {
+            setupPhase.style.display = 'none';
+            scanPhase.style.display = 'grid';
+
+            let newStream = null;
+
+            // 1. まず facingMode ideal で取得を試みる（多くの端末で成功）
+            if (isFrontCamera) {
+                newStream = await acquireStream([
+                    { video: { facingMode: { ideal: "user" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+                    { video: { facingMode: { ideal: "user" } }, audio: false },
+                    { video: { facingMode: "user" }, audio: false }
+                ]);
+            } else {
+                newStream = await acquireStream([
+                    { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+                    { video: { facingMode: { ideal: "environment" } }, audio: false },
+                    { video: { facingMode: "environment" }, audio: false }
+                ]);
+            }
+
+            // 2. 取得できた場合、望みの面と一致するか確認。不一致なら破棄して deviceId 方式へ。
+            if (newStream) {
+                const track = newStream.getVideoTracks()[0];
+                const wantFace = isFrontCamera ? 'user' : 'environment';
+                if (track && !isTrackFacing(track, wantFace)) {
+                    newStream.getTracks().forEach(t => t.stop());
+                    newStream = null;
+                }
+            }
+
+            // 3. facingMode 方式で失敗/不一致の場合、deviceId ベースで全カメラを順次試行。
+            //    一部のiPad/スマホは facingMode 制約を無視するため、これが確実な方法。
+            if (!newStream) {
+                // パーミッション取得＆ラベル有効化のため一度 { video: true }
+                const permStream = await acquireStream([{ video: true, audio: false }]);
+                if (permStream) {
+                    let videoDevices = [];
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        videoDevices = devices.filter(d => d.kind === 'videoinput' && d.deviceId);
+                    } catch (e) {}
+                    permStream.getTracks().forEach(t => t.stop());
+
+                    const wantFace = isFrontCamera ? 'user' : 'environment';
+                    // 外カメ候補をラベルで優先ソート（ラベルに back/rear を含むものを先頭へ）
+                    const sorted = [...videoDevices].sort((a, b) => {
+                        const aBack = /back|rear|environment|背面|外/i.test(a.label) ? 0 : 1;
+                        const bBack = /back|rear|environment|背面|外/i.test(b.label) ? 0 : 1;
+                        if (isFrontCamera) return (/front|user|前面|内|face/i.test(a.label) ? 0 : 1) - (/front|user|前面|内|face/i.test(b.label) ? 0 : 1);
+                        return aBack - bBack;
+                    });
+
+                    for (const dev of sorted) {
+                        try {
+                            const s = await navigator.mediaDevices.getUserMedia({
+                                video: { deviceId: { exact: dev.deviceId } }, audio: false
+                            });
+                            const track = s.getVideoTracks()[0];
+                            if (track && isTrackFacing(track, wantFace)) {
+                                newStream = s;
+                                break;
+                            }
+                            s.getTracks().forEach(t => t.stop());
+                        } catch (e) {}
+                    }
+
+                    // 4. facingMode 判定でも特定できなかった場合、ラベルだけで選択
+                    if (!newStream && sorted.length > 0) {
+                        const labelMatch = isFrontCamera
+                            ? sorted.find(d => /front|user|前面|内|face/i.test(d.label))
+                            : sorted.find(d => /back|rear|environment|背面|外/i.test(d.label));
+                        const fallbackDev = labelMatch || sorted[0];
+                        if (fallbackDev) {
+                            newStream = await acquireStream([
+                                { video: { deviceId: { exact: fallbackDev.deviceId } }, audio: false },
+                                { video: { deviceId: { ideal: fallbackDev.deviceId } }, audio: false }
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // 5. 外カメで複数レンズがある場合、0.5x/1.0x 切替を deviceId で試みる
+            if (newStream && !isFrontCamera) {
+                let videoDevices = [];
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    videoDevices = devices.filter(d => d.kind === 'videoinput' && d.deviceId &&
+                        /back|rear|environment|背面|外/i.test(d.label));
+                } catch (e) {}
+
+                if (videoDevices.length > 1) {
+                    let targetId = null;
+                    if (isUltraWideMode) {
+                        const ultra = videoDevices.find(d =>
+                            /ultra|0\.5|super|超広角|ウルトラ|3/i.test(d.label));
+                        targetId = ultra ? ultra.deviceId : videoDevices[Math.min(1, videoDevices.length - 1)].deviceId;
+                    } else {
+                        const main = videoDevices.find(d =>
+                            /main|wide|広角|1\.0|1x/i.test(d.label)) || videoDevices[0];
+                        targetId = main.deviceId;
+                    }
+
+                    if (targetId) {
+                        const lensStream = await acquireStream([
+                            { video: { deviceId: { exact: targetId } }, audio: false },
+                            { video: { deviceId: { ideal: targetId } }, audio: false }
+                        ]);
+                        if (lensStream) {
+                            newStream.getTracks().forEach(t => t.stop());
+                            newStream = lensStream;
+                        }
+                    }
+                }
+            }
+
+            // 6. 全て失敗なら現状維持（画面を黒くしない）
+            if (!newStream) {
+                if (localStream) {
+                    showToast("CAMERA SWITCH FAILED - KEEPING CURRENT");
+                } else {
+                    showToast("CAMERA INITIALIZE FAILED");
+                }
+                return;
+            }
+
+            // 7. 新ストリームに切り替え
+            if (localStream) { localStream.getTracks().forEach(track => track.stop()); }
+            localStream = newStream;
+            document.getElementById('camera-stream').srcObject = localStream;
+            if (scanPhase.requestFullscreen && !document.fullscreenElement) {
+                scanPhase.requestFullscreen().catch(() => {});
+            }
+
+            startFirebaseRoomSync();
+            showToast(isFrontCamera ? "LENS: FRONT (内カメ)" : `LENS: ${isUltraWideMode ? '0.5x' : '1.0x'} BACK`);
+        }
+
+        function toggleCameraLens() {
+            isUltraWideMode = !isUltraWideMode;
+            showToast(isUltraWideMode ? "SWITCHING TO 0.5x..." : "SWITCHING TO 1.0x...");
+            startCameraEngine();
+        }
+
+        function toggleFacingCamera() {
+            isFrontCamera = !isFrontCamera;
+            updateFacingButtonLabel();
+            showToast(isFrontCamera ? "SWITCHING TO 内カメ..." : "SWITCHING TO 外カメ...");
+            startCameraEngine();
+        }
+
+        function updateFacingButtonLabel() {
+            const btn = document.getElementById('btn-toggle-facing');
+            if (btn) btn.innerText = isFrontCamera ? "内カメ" : "外カメ";
+        }
+
+        function exitScanMode() {
+            stopContinuousScan();
+            if(localStream) { localStream.getTracks().forEach(track => track.stop()); localStream = null; }
+            if (document.exitFullscreen) { document.exitFullscreen().catch(()=>{}); }
+            if(unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
+            clearInterval(presenceInterval);
+            scanPhase.style.display = 'none';
+            setupPhase.style.display = 'flex';
+        }
+
+        function startFirebaseRoomSync() {
+            const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+            const user = document.getElementById('user-name').value.trim() || 'Unknown';
+
+            if(presenceInterval) clearInterval(presenceInterval);
+            const reportPresence = async () => {
+                const rId = document.getElementById('room-id').value.trim() || 'default_room';
+                const uName = document.getElementById('user-name').value.trim() || 'Unknown';
+                try { await setDoc(doc(db, "rooms", rId), { members: { [uName]: Date.now() } }, { merge: true }); } catch(e){}
+            };
+            reportPresence();
+            presenceInterval = setInterval(reportPresence, 4000);
+
+            unsubscribeRoom = onSnapshot(doc(db, "rooms", roomId), (snapshot) => {
+                if (!snapshot.exists()) {
+                    allPhotosMap = {}; 
+                    document.getElementById('db-counter').innerText = "STOCKS: 0"; 
+                    executeSearch(); 
+                    return;
+                }
+                const data = snapshot.data();
+                
+                if (data.members) {
+                    const now = Date.now();
+                    const activeMembers = Object.keys(data.members).filter(name => (now - data.members[name]) < 10000);
+                    document.getElementById('member-list-text').innerText = `ONLINE: ${activeMembers.join(', ')}`;
+                }
+                
+                if (data.currentQueries) {
+                    data.currentQueries.forEach((q, idx) => {
+                        if (document.activeElement !== searchBoxes[idx]) { 
+                            searchBoxes[idx].value = q || ""; 
+                        }
+                    });
+                }
+                
+                if (data.photoMap) {
+                    allPhotosMap = data.photoMap;
+                    document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
+                } else {
+                    allPhotosMap = {}; 
+                    document.getElementById('db-counter').innerText = "STOCKS: 0";
+                }
+                executeSearch();
+            });
+        }
+
+        async function syncInputsToFirebase() {
+            const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+            const queries = searchBoxes.map(b => b.value.trim());
+            try { 
+                await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
+            } catch(e) {}
+        }
+
+        // 画面全体をそのまま1枚の画像としてVision APIへ送る。
+        // 以前の「半分に割って上下に並べる」手法は、数字が中央で分断されたり
+        // アスペクト比が崩れて認識率が下がる原因になっていたため廃止。
+        async function processCaptureOCR(mode, isContinuous = false) {
+            const videoEl = document.getElementById('camera-stream');
+            const apiKey = document.getElementById('api-key').value.trim();
+            if(!localStream || !apiKey) return;
+
+            if (!isContinuous) {
+                const indicator = document.getElementById('scan-indicator');
+                indicator.classList.add('active');
+                setTimeout(() => indicator.classList.remove('active'), 120);
+                showToast("SCANNING...");
+            }
+
+            const srcW = videoEl.videoWidth;
+            const srcH = videoEl.videoHeight;
+            if (!srcW || !srcH) return;
+
+            const workCanvas = document.getElementById('split-work-canvas');
+            workCanvas.width = srcW;
+            workCanvas.height = srcH;
+            const wCtx = workCanvas.getContext('2d');
+            wCtx.drawImage(videoEl, 0, 0, srcW, srcH);
+
+            const base64Image = workCanvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+            const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
+            const requestBody = {
+                requests: [{
+                    image: { content: base64Image },
+                    features: [{ type: "TEXT_DETECTION" }]
+                }]
+            };
+
+            try {
+                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
+                const resData = await response.json();
+                if (!resData.responses || !resData.responses[0] || !resData.responses[0].textAnnotations) {
+                    if (!isContinuous) showToast("NO TEXT DETECTED");
+                    return;
+                }
+
+                const annotations = resData.responses[0].textAnnotations;
+                
+                if (mode === "target") {
+                    await analyzeTargetModeWithAdvancedMatching(annotations, workCanvas, isContinuous);
+                } else {
+                    await analyzeQuestionModeAdvanced(annotations);
+                }
+            } catch (err) {
+                if (!isContinuous) showToast("API DETECT ERROR");
+            }
+        }
+
+        async function analyzeTargetModeWithAdvancedMatching(annotations, originalCanvas, isContinuous) {
+            const fullList = annotations.slice(1);
+            const numbersList = [];
+            const genericBlocks = [];
+
+            fullList.forEach(item => {
+                const text = item.description.trim();
+                const box = item.boundingPoly.vertices;
+                if (!box || box.length < 4) return;
+
+                // 座標はキャプチャ画像(workCanvas)と同じ全画面座標系なので、
+                // 上下分割の座標補正は不要。
+                const cx = ((box[0]?.x ?? 0) + (box[1]?.x ?? 0) + (box[2]?.x ?? 0) + (box[3]?.x ?? 0)) / 4;
+                const cy = ((box[0]?.y ?? 0) + (box[1]?.y ?? 0) + (box[2]?.y ?? 0) + (box[3]?.y ?? 0)) / 4;
+
+                const h = Math.max(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0) - Math.min(box[0]?.y ?? 0, box[1]?.y ?? 0, box[2]?.y ?? 0, box[3]?.y ?? 0);
+                const w = Math.max(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0) - Math.min(box[0]?.x ?? 0, box[1]?.x ?? 0, box[2]?.x ?? 0, box[3]?.x ?? 0);
+
+                const info = { text, cx, cy, w, h };
+
+                if (/^\d{3}$/.test(text)) {
+                    numbersList.push(info);
+                } else {
+                    genericBlocks.push(info);
+                }
+            });
+
+            if (numbersList.length === 0) {
+                if (!isContinuous) showToast("NO 3-DIGIT TARGETS");
+                return;
+            }
+
+            const updates = {};
+            const newNumbers = [];
+
+            numbersList.forEach(numObj => {
+                const verticalCandidates = genericBlocks.filter(b => {
+                    const xDiff = Math.abs(numObj.cx - b.cx);
+                    const yDiff = b.cy - numObj.cy;
+                    return (xDiff < numObj.w * 0.5) && (yDiff > 0) && (yDiff < numObj.h * 5);
+                });
+
+                let centerCx = numObj.cx;
+                let centerCy = numObj.cy + (numObj.h * 1.8);
+                let baseCropW = numObj.w * 1.7;
+
+                if (verticalCandidates.length > 0) {
+                    verticalCandidates.sort((a, b) => Math.abs(numObj.cx - a.cx) - Math.abs(numObj.cx - b.cx));
+                    const bestBlock = verticalCandidates[0];
+                    centerCx = (numObj.cx + bestBlock.cx) / 2;
+                    centerCy = (numObj.cy + bestBlock.cy) / 2;
+                    baseCropW = Math.max(numObj.w, bestBlock.w, bestBlock.h) * 1.5;
+                }
+
+                const standardCropW = baseCropW * 1.35;
+                const standardCropH = standardCropW * (160 / 120);
+
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = 120; cropCanvas.height = 160;
+                const cCtx = cropCanvas.getContext('2d');
+
+                const cropX1 = Math.max(0, centerCx - (standardCropW / 2));
+                const cropY1 = Math.max(0, centerCy - (standardCropH / 2));
+                cCtx.clearRect(0,0,120,160);
+                cCtx.drawImage(originalCanvas, cropX1, cropY1, standardCropW, standardCropH, 0, 0, 120, 160);
+                const img1 = cropCanvas.toDataURL('image/jpeg', 0.65);
+
+                const wideCropW = standardCropW * 1.25;
+                const wideCropH = standardCropH * 1.25;
+                const cropX2 = Math.max(0, centerCx - (wideCropW / 2));
+                const cropY2 = Math.max(0, centerCy - (wideCropH / 2));
+                cCtx.clearRect(0,0,120,160);
+                cCtx.drawImage(originalCanvas, cropX2, cropY2, wideCropW, wideCropH, 0, 0, 120, 160);
+                const img2 = cropCanvas.toDataURL('image/jpeg', 0.65);
+
+                const zoomCropW = standardCropW * 0.75;
+                const zoomCropH = standardCropH * 0.75;
+                const cropX3 = Math.max(0, centerCx - (zoomCropW / 2));
+                const cropY3 = Math.max(0, centerCy - (zoomCropH / 2));
+                cCtx.clearRect(0,0,120,160);
+                cCtx.drawImage(originalCanvas, cropX3, cropY3, zoomCropW, zoomCropH, 0, 0, 120, 160);
+                const img3 = cropCanvas.toDataURL('image/jpeg', 0.65);
+
+                const entry = {
+                    croppedImgs: [img1, img2, img3],
+                    timestamp: Date.now()
+                };
+
+                if (isContinuous) {
+                    // 同一長押しセッション内で未検出の数字だけを新規ストック。
+                    // 既出の数字は再書き込みせず、API/Firestoreの無駄な消費を防ぐ。
+                    if (continuousSessionNumbers.has(numObj.text)) return;
+                    continuousSessionNumbers.add(numObj.text);
+                    updates[numObj.text] = entry;
+                    newNumbers.push(numObj.text);
+                } else {
+                    updates[numObj.text] = entry;
+                }
+            });
+
+            const matchCount = Object.keys(updates).length;
+            if (matchCount > 0) {
+                const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+                const mergedMap = { ...allPhotosMap };
+                Object.keys(updates).forEach(num => { mergedMap[num] = updates[num]; });
+                try {
+                    await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
+                    if (isContinuous) {
+                        if (newNumbers.length > 0) {
+                            showToast(`+${newNumbers.length} 新規: ${newNumbers.join(", ")}`);
+                        }
+                    } else {
+                        showToast(`STOCKED: ${matchCount} UNITS`);
+                    }
+                } catch (e) {
+                    if (!isContinuous) showToast("SYNC ERROR");
+                }
+            } else {
+                if (!isContinuous) showToast("MATCHING CRITERIA FAILED");
+            }
+        }
+
+        async function analyzeQuestionModeAdvanced(annotations) {
+            const fullList = annotations.slice(1);
+            const foundNumbers = [];
+            
+            fullList.forEach(item => {
+                const text = item.description.trim();
+                if (/^\d{3}$/.test(text)) {
+                    const box = item.boundingPoly.vertices;
+                    const cx = ((box[0]?.x ?? 0) + (box[2]?.x ?? 0)) / 2;
+                    foundNumbers.push({ text, x: cx });
+                }
+            });
+            foundNumbers.sort((a, b) => a.x - b.x);
+
+            if (foundNumbers.length >= 1) {
+                const limit = Math.min(foundNumbers.length, 5);
+                for(let i = 0; i < limit; i++) { searchBoxes[i].value = foundNumbers[i].text; }
+                showToast(`QUEST AUTOFILL: ${limit} SLOTS`);
+                syncInputsToFirebase();
+                executeSearch();
+            } else { showToast("NO NUMBERS DETECTED"); }
+        }
+
+        function executeSearch() {
+            searchBoxes.forEach((box, index) => {
+                const query = box.value.trim();
+                const zone = ansZones[index];
+                const rowDiv = document.getElementById('row-' + index);
+
+                if (!query) {
+                    zone.innerHTML = '<span class="no-img-text">VOID</span>';
+                    rowDiv.classList.remove('has-error');
+                    return;
+                }
+
+                const foundMatch = allPhotosMap[query];
+                
+                if (foundMatch) {
+                    const imgList = foundMatch.croppedImgs || (foundMatch.croppedImg ? [foundMatch.croppedImg] : []);
+                    
+                    if (imgList.length > 0) {
+                        let htmlContent = "";
+                        imgList.forEach((imgSrc) => {
+                            htmlContent += `<img src="${imgSrc}">`;
+                        });
+                        
+                        zone.innerHTML = htmlContent;
+                        rowDiv.classList.remove('has-error');
+                    } else {
+                        zone.innerHTML = '<span class="err-text">NONE</span>';
+                        rowDiv.classList.add('has-error');
+                    }
+                } else {
+                    zone.innerHTML = '<span class="err-text">NONE</span>';
+                    rowDiv.classList.add('has-error');
+                }
+            });
+        }
+
+        async function resetSystem() {
+            if (!confirm("ルーム全体のデータとスロット内の数字を完全にリセットしますか？")) return;
+            const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+            try {
+                searchBoxes.forEach(box => box.value = "");
+                slotPatternIndexes = [0, 0, 0, 0, 0];
+                allPhotosMap = {};
+
+                await setDoc(doc(db, "rooms", roomId), {
+                    currentQueries: ["", "", "", "", ""],
+                    photoMap: {}
+                }, { merge: true });
+
+                executeSearch();
+                showToast("ROOM & SLOTS RESET COMPLETE");
+            } catch(e) {
+                showToast("RESET ERROR");
+            }
+        }
+
+        function saveConfig() {
+            localStorage.setItem('cyber_ocr_api_key', document.getElementById('api-key').value);
+            localStorage.setItem('cyber_room_id', document.getElementById('room-id').value);
+            localStorage.setItem('cyber_user_name', document.getElementById('user-name').value);
+        }
+        function loadConfig() {
+            document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
+            document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
+            document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
+        }
+        function showToast(msg) {
+            const toast = document.getElementById('toast-log');
+            toast.innerText = msg; toast.classList.add('show');
+            clearTimeout(toast.timeout);
+            toast.timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+    </script>
 </body>
 </html>
