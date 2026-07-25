@@ -174,7 +174,7 @@
             background: var(--bg-dark);
             display: none;
             z-index: 1000;
-            grid-template-columns: 1fr 420px;
+            grid-template-columns: 1fr 340px;
         }
 
         .hud-left {
@@ -203,25 +203,26 @@
 }
 
         .hud-left-bottom-controls {
-            height: 70px;
+            height: 56px;
             background: rgba(10, 14, 20, 0.95);
             border-top: 1px solid rgba(0, 229, 255, 0.3);
             display: flex;
             align-items: center;
-            padding: 0 15px;
-            gap: 10px;
+            padding: 0 10px;
+            gap: 8px;
         }
 
         .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
-            height: 52px;
-            padding: 0 18px;
-            border-radius: 8px;
-            font-size: 15px;
+            height: 40px;
+            padding: 0 12px;
+            border-radius: 6px;
+            font-size: 13px;
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            white-space: nowrap;
         }
 
         .btn-exit-icon {
@@ -258,18 +259,18 @@
             border-left: 2px solid rgba(0, 229, 255, 0.3);
             display: flex;
             flex-direction: column;
-            padding: 8px;
-            gap: 6px;
+            padding: 6px;
+            gap: 4px;
             height: 100%;
             overflow: hidden;
         }
 
         .hud-panel-title {
-            font-size: 12px;
+            font-size: 10px;
             color: #8cc8ff;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 4px;
+            padding-bottom: 3px;
             font-weight: bold;
             letter-spacing: 1px;
         }
@@ -277,7 +278,7 @@
         .hud-slot-list {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 3px;
             flex: 1;
             min-height: 0;
         }
@@ -286,20 +287,20 @@
             align-items: center;
             background: rgba(20, 30, 45, 0.6);
             border: 1px solid rgba(140, 200, 255, 0.2);
-            border-radius: 6px;
-            padding: 4px;
-            gap: 8px;
+            border-radius: 4px;
+            padding: 3px;
+            gap: 5px;
             flex: 1;
             min-height: 0;
         }
         .hud-slot-row.has-error { border-color: rgba(255, 51, 51, 0.4); background: rgba(255,0,0,0.05); }
         
         .hud-slot-row input {
-            width: 58px;
-            min-width: 58px;
+            width: 42px;
+            min-width: 42px;
             height: 100%;
             padding: 2px;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
             text-align: center;
             background: #000;
@@ -311,7 +312,7 @@
             flex: 1;
             height: 100%;
             background: rgba(0,0,0,0.5);
-            border-radius: 4px;
+            border-radius: 3px;
             overflow: hidden;
             display: flex !important;
             justify-content: space-around;
@@ -319,18 +320,18 @@
             border: 1px solid rgba(255,255,255,0.08);
             position: relative;
             cursor: pointer;
-            gap: 4px;
-            padding: 3px;
+            gap: 3px;
+            padding: 2px;
         }
         .hud-slot-ans-zone img {
-            width: 31% !important;
+            width: 32% !important;
             height: 100% !important;
             object-fit: cover;
             border: 1px solid rgba(0, 229, 255, 0.4);
-            border-radius: 3px;
+            border-radius: 2px;
         }
-        .hud-slot-ans-zone .no-img-text { font-size: 12px; color: #445566; font-weight: bold; margin: auto; }
-        .hud-slot-ans-zone .err-text { font-size: 12px; color: var(--cyber-red); font-weight: bold; margin: auto; }
+        .hud-slot-ans-zone .no-img-text { font-size: 10px; color: #445566; font-weight: bold; margin: auto; }
+        .hud-slot-ans-zone .err-text { font-size: 10px; color: var(--cyber-red); font-weight: bold; margin: auto; }
         
         .pattern-badge {
             display: none !important;
@@ -339,26 +340,26 @@
         .hud-control-bottom {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            padding-top: 6px;
+            gap: 4px;
+            padding-top: 4px;
             border-top: 1px solid rgba(255,255,255,0.1);
         }
-        .stocks-counter { font-size: 11px; color: #8cc8ff; font-weight: bold; text-align: center; }
+        .stocks-counter { font-size: 10px; color: #8cc8ff; font-weight: bold; text-align: center; }
 
         .shutter-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 6px;
         }
         .shutter-grid button { touch-action: none; }
 
         .btn-shutter-target {
-            padding: 16px 0;
-            border-radius: 8px;
+            padding: 12px 0;
+            border-radius: 6px;
             background: linear-gradient(180deg, #ffffff 0%, #b5e9ff 100%);
             border: 2px solid var(--cyber-blue);
             color: #050b14;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(0,229,255,0.2);
         }
@@ -376,12 +377,12 @@
         }
 
         .btn-shutter-quest {
-            padding: 16px 0;
-            border-radius: 8px;
+            padding: 12px 0;
+            border-radius: 6px;
             background: linear-gradient(180deg, #ffffff 0%, #e2c6ff 100%);
             border: 2px solid var(--cyber-purple);
             color: #050b14;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(181,124,255,0.2);
         }
@@ -526,7 +527,7 @@
         const SCAN_INTERVAL_MS = 1500;
         // 重複判定しきい値はキャプチャ幅に対する比率で算出（4Kでも手ブレで過剰ストックしない）
         const POS_DUP_FRAC = 0.05;
-        const MAX_CANDIDATES = 12; // 同一数字あたりの候補スクショ上限
+        const MAX_CANDIDATES = 3; // 同一数字あたりの候補スクショは常に3枚
 
         // タイル分割設定
         const TILE_COLS = 4;
@@ -1189,7 +1190,7 @@
             await analyzeTargetModeWithAdvancedMatching(mergedNumbers, allGeneric, fullCanvas, isContinuous, posDupPx);
         }
 
-        // 3パターンのスクショを生成してストック。
+        // 3パターンのスクショを生成してストック。数字が画面上部にくるようクロップする。
         async function analyzeTargetModeWithAdvancedMatching(numbersList, genericBlocks, originalCanvas, isContinuous, posDupPx) {
             const updates = {};
             const newNumbers = [];
@@ -1210,52 +1211,52 @@
                     return (xDiff < numObj.w * 0.5) && (yDiff > 0) && (yDiff < numObj.h * 5);
                 });
 
-                let centerCx = numObj.cx;
-                let centerCy = numObj.cy + (numObj.h * 1.8);
-                let baseCropW = numObj.w * 1.7;
+                // 数字をクロップ上部に配置し、下の正方形も映るようにする
+                let cropCx = numObj.cx;
+                let cropTopY = numObj.cy - numObj.h * 0.5; // 数字の上端あたりから切り出し
+                let baseCropW = numObj.w * 2.2;
+                let baseCropH = numObj.h * 4.5; // 数字+下の正方形を含む高さ
 
                 if (verticalCandidates.length > 0) {
                     verticalCandidates.sort((a, b) => Math.abs(numObj.cx - a.cx) - Math.abs(numObj.cx - b.cx));
                     const bestBlock = verticalCandidates[0];
-                    centerCx = (numObj.cx + bestBlock.cx) / 2;
-                    centerCy = (numObj.cy + bestBlock.cy) / 2;
-                    baseCropW = Math.max(numObj.w, bestBlock.w, bestBlock.h) * 1.5;
+                    cropCx = (numObj.cx + bestBlock.cx) / 2;
+                    // 正方形の下端まで含める
+                    const blockBottom = bestBlock.cy + bestBlock.h * 0.5;
+                    baseCropH = Math.max(baseCropH, (blockBottom - cropTopY) * 1.1);
+                    baseCropW = Math.max(baseCropW, bestBlock.w * 1.6, bestBlock.h * 1.6);
                 }
-
-                const standardCropW = baseCropW * 1.35;
-                const standardCropH = standardCropW * (160 / 120);
 
                 const cropCanvas = document.createElement('canvas');
                 cropCanvas.width = 120; cropCanvas.height = 160;
                 const cCtx = cropCanvas.getContext('2d');
 
-                // パターン1: 標準
-                const cropX1 = Math.max(0, centerCx - (standardCropW / 2));
-                const cropY1 = Math.max(0, centerCy - (standardCropH / 2));
+                // パターン1: 標準（数字上部＋正方形）
+                const cropX1 = Math.max(0, cropCx - (baseCropW / 2));
+                const cropY1 = Math.max(0, cropTopY);
                 cCtx.clearRect(0, 0, 120, 160);
-                cCtx.drawImage(originalCanvas, cropX1, cropY1, standardCropW, standardCropH, 0, 0, 120, 160);
-                // 画質向上: クロップJPEG品質を引き上げ
+                cCtx.drawImage(originalCanvas, cropX1, cropY1, baseCropW, baseCropH, 0, 0, 120, 160);
                 const img1 = cropCanvas.toDataURL('image/jpeg', CROP_JPEG_QUALITY);
 
-                // パターン2: ワイド
-                const wideCropW = standardCropW * 1.25;
-                const wideCropH = standardCropH * 1.25;
-                const cropX2 = Math.max(0, centerCx - (wideCropW / 2));
-                const cropY2 = Math.max(0, centerCy - (wideCropH / 2));
+                // パターン2: ワイド（広めに切り出し）
+                const wideCropW = baseCropW * 1.3;
+                const wideCropH = baseCropH * 1.15;
+                const cropX2 = Math.max(0, cropCx - (wideCropW / 2));
+                const cropY2 = Math.max(0, cropTopY - baseCropH * 0.05);
                 cCtx.clearRect(0, 0, 120, 160);
                 cCtx.drawImage(originalCanvas, cropX2, cropY2, wideCropW, wideCropH, 0, 0, 120, 160);
                 const img2 = cropCanvas.toDataURL('image/jpeg', CROP_JPEG_QUALITY);
 
-                // パターン3: ズーム
-                const zoomCropW = standardCropW * 0.75;
-                const zoomCropH = standardCropH * 0.75;
-                const cropX3 = Math.max(0, centerCx - (zoomCropW / 2));
-                const cropY3 = Math.max(0, centerCy - (zoomCropH / 2));
+                // パターン3: ズーム（やや寄る）
+                const zoomCropW = baseCropW * 0.8;
+                const zoomCropH = baseCropH * 0.85;
+                const cropX3 = Math.max(0, cropCx - (zoomCropW / 2));
+                const cropY3 = Math.max(0, cropTopY + baseCropH * 0.03);
                 cCtx.clearRect(0, 0, 120, 160);
                 cCtx.drawImage(originalCanvas, cropX3, cropY3, zoomCropW, zoomCropH, 0, 0, 120, 160);
                 const img3 = cropCanvas.toDataURL('image/jpeg', CROP_JPEG_QUALITY);
 
-                // 同じ数字でも場所が違えば別候補として追加（上書きしない）
+                // 常に3枚のみ保持。連続スキャンで別位置の同じ数字は3枚のいずれかを差し替え。
                 if (!updates[numObj.text]) {
                     updates[numObj.text] = { croppedImgs: [], timestamp: Date.now() };
                 }
@@ -1285,17 +1286,17 @@
                 const roomId = document.getElementById('room-id').value.trim() || 'default_room';
                 const mergedMap = { ...allPhotosMap };
                 Object.keys(updates).forEach(num => {
-                    // 連続スキャン時は既存候補に新候補を追加（重複画像は除外、上限まで）
+                    const newImgs = updates[num].croppedImgs.slice(0, MAX_CANDIDATES);
                     if (isContinuous && mergedMap[num] && Array.isArray(mergedMap[num].croppedImgs)) {
-                        const seen = new Set(mergedMap[num].croppedImgs);
-                        const added = updates[num].croppedImgs.filter(img => !seen.has(img));
+                        // 既存3枚のいずれかを新しい3枚で差し替え（追加ではなく置換）
+                        // 新しい3枚で完全に置き換えることで常に3枚のみ保持
                         mergedMap[num] = {
-                            croppedImgs: mergedMap[num].croppedImgs.concat(added).slice(0, MAX_CANDIDATES),
+                            croppedImgs: newImgs,
                             timestamp: Date.now()
                         };
                     } else {
                         mergedMap[num] = {
-                            croppedImgs: updates[num].croppedImgs.slice(0, MAX_CANDIDATES),
+                            croppedImgs: newImgs,
                             timestamp: Date.now()
                         };
                     }
