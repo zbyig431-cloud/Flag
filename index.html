@@ -98,8 +98,9 @@
         }
 
         .hud-member-status {
-            flex: 1;
+            flex: 0 1 auto;
             min-width: 0;
+            max-width: 40%;
             height: 80%;
             min-height: 28px;
             background: rgba(57, 255, 20, 0.06);
@@ -209,7 +210,7 @@
         }
 
         .hud-left-bottom-controls {
-            grid-column: 1 / -1;
+            grid-column: 1;
             grid-row: 2;
             background: rgba(10, 14, 20, 0.95);
             border-top: 1px solid rgba(0, 229, 255, 0.3);
@@ -266,7 +267,7 @@
 
         .hud-right {
             grid-column: 2;
-            grid-row: 1;
+            grid-row: 1 / -1;
             background: #0a0e14;
             border-left: 2px solid rgba(0, 229, 255, 0.3);
             display: flex;
@@ -442,6 +443,7 @@
                 min-height: 26px;
                 font-size: 9px;
                 padding: 0 5px;
+                max-width: 35%;
             }
             .online-dot { width: 5px; height: 5px; }
             .hud-right { padding: 3px; gap: 2px; }
