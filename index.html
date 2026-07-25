@@ -1132,60 +1132,56 @@
                 return;
             }
 
-            // ── target モード: 9枚並列スキャン ──
-            const tiles = buildTiles(srcW, srcH);
-
-            // タイルもAI送信用にダウンスケール（座標は元の4K空間へ戻す）
-            const tileAPIData = tiles.map(t => {
-                const d = downscaleForAPI(t.canvas, API_MAX_DIM);
-                return {
-                    base64: d.canvas.toDataURL('image/jpeg', TILE_JPEG_QUALITY).split(',')[1],
-                    scaleX: d.scaleX, scaleY: d.scaleY,
-                    offsetX: t.offsetX, offsetY: t.offsetY
-                };
-            });
-
-            const fullPromise = callVisionAPI(apiKey, fullBase64);
-            const tilePromises = tileAPIData.map(t => callVisionAPI(apiKey, t.base64));
-
-            // Promise.allSettled: 一部タイルが失敗しても全体を破棄しない（認識0になる問題の修正）
-            const settledResults = await Promise.allSettled([fullPromise, ...tilePromises]);
-
-            // 全結果を統合（失敗分はスキップ）
+            // ── target モード ──
+            // まず画面全体を1枚だけAIへ送り、3桁数字を認識する。
+            // （従来は全体1枚＋タイル8枚の計9枚を同時送信していたが、
+            //   これがAPIの並列制限に引っかかってすべて失敗しスキャンできなかった原因。
+            //   まず全体1枚で確実に認識し、数字が1つも見つからなかった場合だけ
+            //   タイル分割で再スキャンするフォールバックに変更。）
             let allNumbers = [];
             let allGeneric = [];
-            let successCount = 0;
 
-            if (settledResults[0].status === 'fulfilled') {
-                successCount++;
-                const { numbersList, genericBlocks } = extractAnnotations(settledResults[0].value, 0, 0, fullScaleX, fullScaleY);
-                allNumbers = allNumbers.concat(numbersList);
-                allGeneric = allGeneric.concat(genericBlocks);
-            }
-            for (let i = 0; i < tileAPIData.length; i++) {
-                const r = settledResults[i + 1];
-                if (r.status !== 'fulfilled') continue;
-                successCount++;
-                const t = tileAPIData[i];
-                const { numbersList, genericBlocks } = extractAnnotations(r.value, t.offsetX, t.offsetY, t.scaleX, t.scaleY);
-                allNumbers = allNumbers.concat(numbersList);
-                allGeneric = allGeneric.concat(genericBlocks);
-            }
-
-            // 全API呼び出しが失敗した場合はエラー表示して終了（数字が見つからないのとは別）
-            if (successCount === 0) {
-                const reason = settledResults[0].reason;
-                let msg = "API全件失敗";
-                if (reason && reason.message) msg = "APIエラー: " + reason.message.slice(0, 40);
+            try {
+                const fullAnnotations = await callVisionAPI(apiKey, fullBase64);
+                const r = extractAnnotations(fullAnnotations, 0, 0, fullScaleX, fullScaleY);
+                allNumbers = allNumbers.concat(r.numbersList);
+                allGeneric = allGeneric.concat(r.genericBlocks);
+            } catch (err) {
+                // 全体取得すら失敗した場合はタイルも試さずエラー
+                const msg = "APIエラー: " + (err.message || "").slice(0, 40);
                 if (!isContinuous) showToast(msg);
-                throw new Error(msg);
+                throw err;
+            }
+
+            // 全体で3桁数字が1つも見つからなかった場合だけ、タイル分割で再スキャン
+            if (allNumbers.length === 0) {
+                const tiles = buildTiles(srcW, srcH);
+                const tileAPIData = tiles.map(t => {
+                    const d = downscaleForAPI(t.canvas, API_MAX_DIM);
+                    return {
+                        base64: d.canvas.toDataURL('image/jpeg', TILE_JPEG_QUALITY).split(',')[1],
+                        scaleX: d.scaleX, scaleY: d.scaleY,
+                        offsetX: t.offsetX, offsetY: t.offsetY
+                    };
+                });
+                const tilePromises = tileAPIData.map(t => callVisionAPI(apiKey, t.base64));
+                const settledResults = await Promise.allSettled(tilePromises);
+                for (let i = 0; i < tileAPIData.length; i++) {
+                    const res = settledResults[i];
+                    if (res.status !== 'fulfilled') continue;
+                    const t = tileAPIData[i];
+                    const r = extractAnnotations(res.value, t.offsetX, t.offsetY, t.scaleX, t.scaleY);
+                    allNumbers = allNumbers.concat(r.numbersList);
+                    allGeneric = allGeneric.concat(r.genericBlocks);
+                }
             }
 
             const posDupPx = Math.max(60, srcW * POS_DUP_FRAC);
             const mergedNumbers = dedupNumbers(allNumbers, posDupPx);
 
             if (mergedNumbers.length === 0) {
-                if (!isContinuous) showToast("NO 3-DIGIT TARGETS");
+                // 連続スキャン中でも「数字が見つからない」ことを通知（無反応に見えるのを防ぐ）
+                showToast("NO 3-DIGIT TARGETS");
                 return;
             }
 
