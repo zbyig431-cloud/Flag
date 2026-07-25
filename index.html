@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>テスト　高画質</title>
+    <title>テスト版　画面8分割</title>
     <!-- Firebase SDK (v10) -->
     <script type="importmap">
       {
@@ -324,11 +324,12 @@
             padding: 2px;
         }
         .hud-slot-ans-zone img {
-            width: 32% !important;
-            height: 100% !important;
-            object-fit: cover;
+            width: 26% !important;
+            height: 88% !important;
+            object-fit: contain;
             border: 1px solid rgba(0, 229, 255, 0.4);
             border-radius: 2px;
+            background: #000;
         }
         .hud-slot-ans-zone .no-img-text { font-size: 10px; color: #445566; font-weight: bold; margin: auto; }
         .hud-slot-ans-zone .err-text { font-size: 10px; color: var(--cyber-red); font-weight: bold; margin: auto; }
@@ -1214,8 +1215,8 @@
                 // 数字をクロップ上部に配置し、下の正方形も映るようにする
                 let cropCx = numObj.cx;
                 let cropTopY = numObj.cy - numObj.h * 0.5; // 数字の上端あたりから切り出し
-                let baseCropW = numObj.w * 2.2;
-                let baseCropH = numObj.h * 4.5; // 数字+下の正方形を含む高さ
+                let baseCropW = numObj.w * 2.8;
+                let baseCropH = numObj.h * 5.2; // 数字+下の正方形を含む高さ（やや広め）
 
                 if (verticalCandidates.length > 0) {
                     verticalCandidates.sort((a, b) => Math.abs(numObj.cx - a.cx) - Math.abs(numObj.cx - b.cx));
@@ -1224,7 +1225,7 @@
                     // 正方形の下端まで含める
                     const blockBottom = bestBlock.cy + bestBlock.h * 0.5;
                     baseCropH = Math.max(baseCropH, (blockBottom - cropTopY) * 1.1);
-                    baseCropW = Math.max(baseCropW, bestBlock.w * 1.6, bestBlock.h * 1.6);
+                    baseCropW = Math.max(baseCropW, bestBlock.w * 2.0, bestBlock.h * 2.0);
                 }
 
                 const cropCanvas = document.createElement('canvas');
