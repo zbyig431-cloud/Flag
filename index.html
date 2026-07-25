@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>テスト版　画面8分割</title>
+    <title>N トワもんGemini</title>
     <!-- Firebase SDK (v10) -->
     <script type="importmap">
       {
@@ -98,9 +98,8 @@
         }
 
         .hud-member-status {
-            flex: 0 1 auto;
+            flex: 1 1 auto;
             min-width: 0;
-            max-width: 40%;
             height: 80%;
             min-height: 28px;
             background: rgba(57, 255, 20, 0.06);
@@ -108,8 +107,8 @@
             border-radius: 4px;
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 0 8px;
+            gap: 6px;
+            padding: 0 10px;
             font-size: 11px;
             color: var(--cyber-green);
             overflow: hidden;
@@ -216,16 +215,17 @@
             border-top: 1px solid rgba(0, 229, 255, 0.3);
             display: flex;
             align-items: center;
-            padding: 0 6px;
-            gap: 6px;
+            justify-content: space-between;
+            padding: 0 10px;
+            gap: 10px;
             overflow-x: auto;
             overflow-y: hidden;
         }
 
         .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
             height: 80%;
-            min-height: 28px;
-            padding: 0 10px;
+            min-height: 30px;
+            padding: 0 16px;
             border-radius: 4px;
             font-size: 12px;
             font-weight: bold;
@@ -442,8 +442,7 @@
                 height: 26px;
                 min-height: 26px;
                 font-size: 9px;
-                padding: 0 5px;
-                max-width: 35%;
+                padding: 0 6px;
             }
             .online-dot { width: 5px; height: 5px; }
             .hud-right { padding: 3px; gap: 2px; }
