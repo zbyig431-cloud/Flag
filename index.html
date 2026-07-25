@@ -100,15 +100,16 @@
         .hud-member-status {
             flex: 1;
             min-width: 0;
-            height: clamp(26px, 6vh, 36px);
+            height: 80%;
+            min-height: 28px;
             background: rgba(57, 255, 20, 0.06);
             border: 1px solid rgba(57, 255, 20, 0.25);
             border-radius: 4px;
             display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 0 5px;
-            font-size: clamp(8px, 1.5vw, 11px);
+            gap: 5px;
+            padding: 0 8px;
+            font-size: 11px;
             color: var(--cyber-green);
             overflow: hidden;
             white-space: nowrap;
@@ -167,56 +168,65 @@
             font-size: 13px;
         }
 
-        /* PHASE 2: 横画面HUD */
+        /* PHASE 2: 横画面HUD
+           上段(5/6高さ): 左=カメラ(3/5幅) 右=スロット(2/5幅)
+           下段(1/6高さ): 全幅ボタンバー */
         #scan-phase {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
             background: var(--bg-dark);
             display: none;
             z-index: 1000;
-            grid-template-columns: 1fr clamp(140px, 28vw, 300px);
+            grid-template-columns: 3fr 2fr;
+            grid-template-rows: 5fr 1fr;
         }
 
         .hud-left {
             grid-column: 1;
+            grid-row: 1;
             display: flex;
             flex-direction: column;
             height: 100%;
             background: #05080c;
+            overflow: hidden;
         }
 
-.finder-container {
-    width: 100%;
-    flex: 1;
-    position: relative;
-    background: #000;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+        .finder-container {
+            width: 100%;
+            flex: 1;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-#camera-stream {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
+        #camera-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
 
         .hud-left-bottom-controls {
-            height: clamp(36px, 8vh, 56px);
+            grid-column: 1 / -1;
+            grid-row: 2;
             background: rgba(10, 14, 20, 0.95);
             border-top: 1px solid rgba(0, 229, 255, 0.3);
             display: flex;
             align-items: center;
-            padding: 0 4px;
-            gap: 4px;
+            padding: 0 6px;
+            gap: 6px;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
 
         .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
-            height: clamp(26px, 6vh, 36px);
-            padding: 0 clamp(4px, 1.2vw, 10px);
+            height: 80%;
+            min-height: 28px;
+            padding: 0 10px;
             border-radius: 4px;
-            font-size: clamp(9px, 1.6vw, 12px);
+            font-size: 12px;
             font-weight: bold;
             display: flex;
             align-items: center;
@@ -256,30 +266,32 @@
 
         .hud-right {
             grid-column: 2;
+            grid-row: 1;
             background: #0a0e14;
             border-left: 2px solid rgba(0, 229, 255, 0.3);
             display: flex;
             flex-direction: column;
-            padding: clamp(2px, 0.8vw, 6px);
-            gap: clamp(2px, 0.5vh, 4px);
+            padding: 4px;
+            gap: 3px;
             height: 100%;
             overflow: hidden;
         }
 
         .hud-panel-title {
-            font-size: clamp(7px, 1.4vw, 10px);
+            font-size: 10px;
             color: #8cc8ff;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 2px;
             font-weight: bold;
             letter-spacing: 1px;
+            flex-shrink: 0;
         }
 
         .hud-slot-list {
             display: flex;
             flex-direction: column;
-            gap: clamp(1px, 0.4vh, 3px);
+            gap: 3px;
             flex: 1;
             min-height: 0;
         }
@@ -289,19 +301,19 @@
             background: rgba(20, 30, 45, 0.6);
             border: 1px solid rgba(140, 200, 255, 0.2);
             border-radius: 3px;
-            padding: clamp(1px, 0.3vh, 3px);
-            gap: clamp(2px, 0.5vw, 5px);
+            padding: 2px;
+            gap: 4px;
             flex: 1;
             min-height: 0;
         }
         .hud-slot-row.has-error { border-color: rgba(255, 51, 51, 0.4); background: rgba(255,0,0,0.05); }
         
         .hud-slot-row input {
-            width: clamp(28px, 5vw, 42px);
-            min-width: clamp(28px, 5vw, 42px);
+            width: 36px;
+            min-width: 36px;
             height: 100%;
             padding: 1px;
-            font-size: clamp(11px, 2vw, 16px);
+            font-size: 15px;
             font-weight: bold;
             text-align: center;
             background: #000;
@@ -342,26 +354,27 @@
         .hud-control-bottom {
             display: flex;
             flex-direction: column;
-            gap: 2px;
-            padding-top: 2px;
+            gap: 3px;
+            padding-top: 3px;
             border-top: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
         }
-        .stocks-counter { font-size: clamp(7px, 1.4vw, 10px); color: #8cc8ff; font-weight: bold; text-align: center; }
+        .stocks-counter { font-size: 10px; color: #8cc8ff; font-weight: bold; text-align: center; }
 
         .shutter-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: clamp(2px, 0.6vw, 5px);
+            gap: 4px;
         }
         .shutter-grid button { touch-action: none; }
 
         .btn-shutter-target {
-            padding: clamp(6px, 2vh, 12px) 0;
+            padding: 10px 0;
             border-radius: 5px;
             background: linear-gradient(180deg, #ffffff 0%, #b5e9ff 100%);
             border: 2px solid var(--cyber-blue);
             color: #050b14;
-            font-size: clamp(9px, 1.6vw, 13px);
+            font-size: 13px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(0,229,255,0.2);
         }
@@ -379,12 +392,12 @@
         }
 
         .btn-shutter-quest {
-            padding: clamp(6px, 2vh, 12px) 0;
+            padding: 10px 0;
             border-radius: 5px;
             background: linear-gradient(180deg, #ffffff 0%, #e2c6ff 100%);
             border: 2px solid var(--cyber-purple);
             color: #050b14;
-            font-size: clamp(9px, 1.6vw, 13px);
+            font-size: 13px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(181,124,255,0.2);
         }
@@ -412,51 +425,42 @@
         .camera-crosshair::before { top: 14px; left: 0; width: 30px; height: 2px; }
         .camera-crosshair::after { left: 14px; top: 0; width: 2px; height: 30px; }
 
-        /* スマホ横画面（画面高さが小さい）専用：全体をさらに縮小して1画面に収める */
+        /* スマホ横画面（画面高さが小さい）専用：下段ボタンをさらに縮小 */
         @media (max-height: 500px) {
-            #scan-phase {
-                grid-template-columns: 1fr 140px;
-            }
             .hud-left-bottom-controls {
-                height: 34px;
-                padding: 0 3px;
-                gap: 3px;
+                padding: 0 4px;
+                gap: 4px;
             }
             .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
                 height: 26px;
-                padding: 0 5px;
-                font-size: 9px;
+                min-height: 26px;
+                padding: 0 6px;
+                font-size: 10px;
             }
             .hud-member-status {
                 height: 26px;
-                font-size: 8px;
-                padding: 0 4px;
-                gap: 3px;
+                min-height: 26px;
+                font-size: 9px;
+                padding: 0 5px;
             }
             .online-dot { width: 5px; height: 5px; }
-            .hud-right {
-                padding: 2px;
-                gap: 2px;
-            }
-            .hud-panel-title { font-size: 7px; padding-bottom: 1px; }
-            .hud-slot-list { gap: 1px; }
-            .hud-slot-row { padding: 1px; gap: 2px; }
-            .hud-slot-row input {
-                width: 24px; min-width: 24px;
-                font-size: 11px;
-            }
+            .hud-right { padding: 3px; gap: 2px; }
+            .hud-panel-title { font-size: 8px; padding-bottom: 1px; }
+            .hud-slot-list { gap: 2px; }
+            .hud-slot-row { padding: 1px; gap: 3px; }
+            .hud-slot-row input { width: 28px; min-width: 28px; font-size: 12px; }
             .hud-slot-ans-zone { padding: 1px; gap: 1px; }
             .hud-slot-ans-zone .no-img-text,
             .hud-slot-ans-zone .err-text { font-size: 8px; }
-            .hud-control-bottom { gap: 1px; padding-top: 1px; }
-            .stocks-counter { font-size: 7px; }
-            .shutter-grid { gap: 2px; }
+            .hud-control-bottom { gap: 2px; padding-top: 2px; }
+            .stocks-counter { font-size: 8px; }
+            .shutter-grid { gap: 3px; }
             .btn-shutter-target, .btn-shutter-quest {
-                padding: 5px 0;
-                font-size: 9px;
+                padding: 6px 0;
+                font-size: 10px;
                 border-width: 1px;
             }
-            .toast-log { bottom: 40px; padding: 4px 8px; font-size: 9px; }
+            .toast-log { bottom: 60px; padding: 4px 8px; font-size: 9px; }
         }
     </style>
 </head>
@@ -493,17 +497,6 @@
                 <div class="camera-crosshair"></div>
                 <div class="scan-dimmer" id="scan-indicator"></div>
             </div>
-
-            <div class="hud-left-bottom-controls">
-                <button class="btn-exit-icon" id="btn-exit-scan">ホームへ</button>
-                <button class="btn-zoom-toggle" id="btn-toggle-lens">1.0/0.5</button>
-                <button class="btn-camera-toggle" id="btn-toggle-facing">外カメ</button>
-                <div class="hud-member-status">
-                    <span class="online-dot"></span>
-                    <span id="member-list-text">ONLINE: 待機中...</span>
-                </div>
-                <button class="btn-clear-slots" id="btn-clear-slots">クリア</button>
-            </div>
         </div>
 
         <div class="hud-right">
@@ -539,6 +532,17 @@
                     <button class="btn-shutter-quest" id="shutter-quest">問題撮影</button>
                 </div>
             </div>
+        </div>
+
+        <div class="hud-left-bottom-controls">
+            <button class="btn-exit-icon" id="btn-exit-scan">ホームへ</button>
+            <button class="btn-zoom-toggle" id="btn-toggle-lens">1.0/0.5</button>
+            <button class="btn-camera-toggle" id="btn-toggle-facing">外カメ</button>
+            <div class="hud-member-status">
+                <span class="online-dot"></span>
+                <span id="member-list-text">ONLINE: 待機中...</span>
+            </div>
+            <button class="btn-clear-slots" id="btn-clear-slots">クリア</button>
         </div>
 
         <div class="toast-log" id="toast-log">SCANNING...</div>
