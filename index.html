@@ -168,6 +168,55 @@
             font-size: 13px;
         }
 
+        .usage-guide {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 14px 16px;
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+        }
+        .usage-guide h2 {
+            font-size: 13px;
+            color: var(--cyber-blue);
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(0,229,255,0.2);
+            letter-spacing: 1px;
+        }
+        .usage-guide h3 {
+            font-size: 12px;
+            color: var(--cyber-green);
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+        .usage-guide h3:first-of-type { margin-top: 0; }
+        .usage-guide ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 8px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .usage-guide li {
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: #aabbcc;
+            padding-left: 14px;
+            position: relative;
+        }
+        .usage-guide li::before {
+            content: "›";
+            position: absolute;
+            left: 0;
+            color: var(--cyber-blue);
+            font-weight: bold;
+        }
+        .usage-guide .warn li::before { color: var(--cyber-orange); }
+        .usage-guide .warn li { color: #ccbbaa; }
+
         /* PHASE 2: 横画面HUD
            上段(5/6高さ): 左=カメラ(3/5幅) 右=スロット(2/5幅)
            下段(1/6高さ): 全幅ボタンバー */
@@ -487,6 +536,27 @@
         <div class="action-grid">
             <button class="btn-start-scan" id="btn-enter-scan">スキャンモード</button>
             <button class="btn-reset-system" id="btn-reset-all">ルームリセット</button>
+        </div>
+        <div class="usage-guide">
+            <h2>使い方と注意点</h2>
+            <h3>使い方</h3>
+            <ul>
+                <li>ROOM ID・PLAYER NAME・PASS WORD を入力し「スキャンモード」を押すと撮影画面に移動します</li>
+                <li>スキャンは「スキャン長押し」ボタンを押している間、連続で数字を読み取ります</li>
+                <li>「問題撮影」ボタンをタップすると問題文を1枚撮影してAIが解きます</li>
+                <li>読み取った数字はスロット1〜5に自動入力されます。同じ数字の候補が複数ある場合はタップで切り替えできます</li>
+                <li>「クリア」ボタンでスロットを全消去できます</li>
+                <li>「1.0/0.5」でズーム切替、「外カメ」でカメラの表/裏を切り替えられます</li>
+                <li>同じ ROOM ID のメンバーと数字・画像をリアルタイム共有します</li>
+            </ul>
+            <h3>注意点</h3>
+            <ul class="warn">
+                <li>PASS WORD は Google AI Studio の API キーです。正しく入力しないとAI機能が動きません</li>
+                <li>カメラへのアクセス許可が必要です。ブラウザの設定で許可してください</li>
+                <li>スキャン中は手ブレやピンボケると認識精度が下がります。安定した状態で撮影してください</li>
+                <li>「ルームリセット」を押すと共有中のデータがすべて消去されます。メンバー全員に影響します</li>
+                <li>通信環境が悪いと共有に遅延が出ます。安定したネットワークでご利用ください</li>
+            </ul>
         </div>
     </div>
 
