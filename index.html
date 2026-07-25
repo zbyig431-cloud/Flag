@@ -533,11 +533,11 @@
         const TILE_OVERLAP = 0.15;
 
         // 画質向上: APIへ送るJPEGの品質
-        const FULL_JPEG_QUALITY = 0.95;
-        const TILE_JPEG_QUALITY = 0.95;
+        const FULL_JPEG_QUALITY = 0.92;
+        const TILE_JPEG_QUALITY = 0.92;
         const CROP_JPEG_QUALITY = 0.88;
-        // 画質維持: カメラは4Kのまま、AIへ送る画像だけ最大辺1600pxに縮小（APIタイムアウト/拒否防止）
-        const API_MAX_DIM = 1600;
+        // 画質維持: カメラは4Kのまま、AIへ送る画像だけ最大辺1280pxに縮小（APIタイムアウト/拒否/規制制限防止）
+        const API_MAX_DIM = 1280;
 
         const setupPhase = document.getElementById('setup-phase');
         const scanPhase = document.getElementById('scan-phase');
@@ -577,7 +577,11 @@
             shutterTarget.addEventListener('contextmenu', (e) => e.preventDefault());
 
             // 問題撮影：タップで1回撮影
-            document.getElementById('shutter-quest').addEventListener('click', () => processCaptureOCR("question"));
+            document.getElementById('shutter-quest').addEventListener('click', () => {
+                processCaptureOCR("question").catch(err => {
+                    showToast("撮影エラー: " + (err.message || "").slice(0, 30));
+                });
+            });
 
             ['room-id', 'user-name', 'api-key'].forEach(id => {
                 document.getElementById(id).addEventListener('input', saveConfig);
@@ -619,9 +623,18 @@
             continuousScanLoop();
         }
 
+        let continuousErrorCount = 0;
         async function continuousScanLoop() {
             while (isContinuousScanning) {
-                await processCaptureOCR("target", true);
+                try {
+                    await processCaptureOCR("target", true);
+                    continuousErrorCount = 0;
+                } catch (err) {
+                    continuousErrorCount++;
+                    if (continuousErrorCount <= 2) {
+                        showToast("スキャンエラー リトライ中...");
+                    }
+                }
                 if (!isContinuousScanning) break;
                 await new Promise(r => setTimeout(r, SCAN_INTERVAL_MS));
             }
@@ -987,6 +1000,7 @@
         }
 
         // ─── Vision API 呼び出し ───
+        const API_TIMEOUT_MS = 20000; // 20秒でタイムアウト（永远に待たない）
         async function callVisionAPI(apiKey, base64Image) {
             const url = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
             const requestBody = {
@@ -995,14 +1009,30 @@
                     features: [{ type: "TEXT_DETECTION" }]
                 }]
             };
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            const resData = await response.json();
-            if (!resData.responses || !resData.responses[0] || !resData.responses[0].textAnnotations) return [];
-            return resData.responses[0].textAnnotations;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal
+                });
+                if (!response.ok) {
+                    let detail = response.status.toString();
+                    try { const ej = await response.json(); if (ej.error && ej.error.message) detail = ej.error.message.slice(0, 60); } catch (_) {}
+                    throw new Error(`API ${response.status}: ${detail}`);
+                }
+                const resData = await response.json();
+                if (!resData.responses || !resData.responses[0]) return [];
+                if (resData.responses[0].error) {
+                    throw new Error(resData.responses[0].error.message.slice(0, 60));
+                }
+                if (!resData.responses[0].textAnnotations) return [];
+                return resData.responses[0].textAnnotations;
+            } finally {
+                clearTimeout(timer);
+            }
         }
 
         // annotations から3桁数字と汎用ブロックを抽出。
@@ -1062,11 +1092,17 @@
         async function processCaptureOCR(mode, isContinuous = false) {
             const videoEl = document.getElementById('camera-stream');
             const apiKey = document.getElementById('api-key').value.trim();
-            if (!localStream || !apiKey) return;
+            if (!localStream || !apiKey) {
+                if (!isContinuous) showToast("CAMERA OR KEY MISSING");
+                return;
+            }
 
             const srcW = videoEl.videoWidth;
             const srcH = videoEl.videoHeight;
-            if (!srcW || !srcH) return;
+            if (!srcW || !srcH) {
+                if (!isContinuous) showToast("CAMERA NOT READY");
+                return;
+            }
 
             if (!isContinuous) {
                 const indicator = document.getElementById('scan-indicator');
@@ -1118,8 +1154,10 @@
             // 全結果を統合（失敗分はスキップ）
             let allNumbers = [];
             let allGeneric = [];
+            let successCount = 0;
 
             if (settledResults[0].status === 'fulfilled') {
+                successCount++;
                 const { numbersList, genericBlocks } = extractAnnotations(settledResults[0].value, 0, 0, fullScaleX, fullScaleY);
                 allNumbers = allNumbers.concat(numbersList);
                 allGeneric = allGeneric.concat(genericBlocks);
@@ -1127,10 +1165,20 @@
             for (let i = 0; i < tileAPIData.length; i++) {
                 const r = settledResults[i + 1];
                 if (r.status !== 'fulfilled') continue;
+                successCount++;
                 const t = tileAPIData[i];
                 const { numbersList, genericBlocks } = extractAnnotations(r.value, t.offsetX, t.offsetY, t.scaleX, t.scaleY);
                 allNumbers = allNumbers.concat(numbersList);
                 allGeneric = allGeneric.concat(genericBlocks);
+            }
+
+            // 全API呼び出しが失敗した場合はエラー表示して終了（数字が見つからないのとは別）
+            if (successCount === 0) {
+                const reason = settledResults[0].reason;
+                let msg = "API全件失敗";
+                if (reason && reason.message) msg = "APIエラー: " + reason.message.slice(0, 40);
+                if (!isContinuous) showToast(msg);
+                throw new Error(msg);
             }
 
             const posDupPx = Math.max(60, srcW * POS_DUP_FRAC);
