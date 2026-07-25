@@ -100,15 +100,15 @@
         .hud-member-status {
             flex: 1;
             min-width: 0;
-            height: 32px;
+            height: clamp(26px, 6vh, 36px);
             background: rgba(57, 255, 20, 0.06);
             border: 1px solid rgba(57, 255, 20, 0.25);
-            border-radius: 5px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 0 6px;
-            font-size: 9px;
+            gap: 4px;
+            padding: 0 5px;
+            font-size: clamp(8px, 1.5vw, 11px);
             color: var(--cyber-green);
             overflow: hidden;
             white-space: nowrap;
@@ -174,7 +174,7 @@
             background: var(--bg-dark);
             display: none;
             z-index: 1000;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr clamp(140px, 28vw, 300px);
         }
 
         .hud-left {
@@ -203,26 +203,27 @@
 }
 
         .hud-left-bottom-controls {
-            height: 46px;
+            height: clamp(36px, 8vh, 56px);
             background: rgba(10, 14, 20, 0.95);
             border-top: 1px solid rgba(0, 229, 255, 0.3);
             display: flex;
             align-items: center;
-            padding: 0 6px;
-            gap: 5px;
+            padding: 0 4px;
+            gap: 4px;
         }
 
         .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
-            height: 32px;
-            padding: 0 8px;
-            border-radius: 5px;
-            font-size: 11px;
+            height: clamp(26px, 6vh, 36px);
+            padding: 0 clamp(4px, 1.2vw, 10px);
+            border-radius: 4px;
+            font-size: clamp(9px, 1.6vw, 12px);
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
             white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .btn-exit-icon {
@@ -259,14 +260,14 @@
             border-left: 2px solid rgba(0, 229, 255, 0.3);
             display: flex;
             flex-direction: column;
-            padding: 4px;
-            gap: 3px;
+            padding: clamp(2px, 0.8vw, 6px);
+            gap: clamp(2px, 0.5vh, 4px);
             height: 100%;
             overflow: hidden;
         }
 
         .hud-panel-title {
-            font-size: 9px;
+            font-size: clamp(7px, 1.4vw, 10px);
             color: #8cc8ff;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -278,7 +279,7 @@
         .hud-slot-list {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: clamp(1px, 0.4vh, 3px);
             flex: 1;
             min-height: 0;
         }
@@ -288,19 +289,19 @@
             background: rgba(20, 30, 45, 0.6);
             border: 1px solid rgba(140, 200, 255, 0.2);
             border-radius: 3px;
-            padding: 2px;
-            gap: 4px;
+            padding: clamp(1px, 0.3vh, 3px);
+            gap: clamp(2px, 0.5vw, 5px);
             flex: 1;
             min-height: 0;
         }
         .hud-slot-row.has-error { border-color: rgba(255, 51, 51, 0.4); background: rgba(255,0,0,0.05); }
         
         .hud-slot-row input {
-            width: 36px;
-            min-width: 36px;
+            width: clamp(28px, 5vw, 42px);
+            min-width: clamp(28px, 5vw, 42px);
             height: 100%;
             padding: 1px;
-            font-size: 14px;
+            font-size: clamp(11px, 2vw, 16px);
             font-weight: bold;
             text-align: center;
             background: #000;
@@ -341,26 +342,26 @@
         .hud-control-bottom {
             display: flex;
             flex-direction: column;
-            gap: 3px;
-            padding-top: 3px;
+            gap: 2px;
+            padding-top: 2px;
             border-top: 1px solid rgba(255,255,255,0.1);
         }
-        .stocks-counter { font-size: 9px; color: #8cc8ff; font-weight: bold; text-align: center; }
+        .stocks-counter { font-size: clamp(7px, 1.4vw, 10px); color: #8cc8ff; font-weight: bold; text-align: center; }
 
         .shutter-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 4px;
+            gap: clamp(2px, 0.6vw, 5px);
         }
         .shutter-grid button { touch-action: none; }
 
         .btn-shutter-target {
-            padding: 9px 0;
+            padding: clamp(6px, 2vh, 12px) 0;
             border-radius: 5px;
             background: linear-gradient(180deg, #ffffff 0%, #b5e9ff 100%);
             border: 2px solid var(--cyber-blue);
             color: #050b14;
-            font-size: 11px;
+            font-size: clamp(9px, 1.6vw, 13px);
             font-weight: 900;
             box-shadow: 0 0 10px rgba(0,229,255,0.2);
         }
@@ -378,12 +379,12 @@
         }
 
         .btn-shutter-quest {
-            padding: 9px 0;
+            padding: clamp(6px, 2vh, 12px) 0;
             border-radius: 5px;
             background: linear-gradient(180deg, #ffffff 0%, #e2c6ff 100%);
             border: 2px solid var(--cyber-purple);
             color: #050b14;
-            font-size: 11px;
+            font-size: clamp(9px, 1.6vw, 13px);
             font-weight: 900;
             box-shadow: 0 0 10px rgba(181,124,255,0.2);
         }
@@ -410,6 +411,53 @@
         .camera-crosshair::before, .camera-crosshair::after { content: ''; position: absolute; background: white; }
         .camera-crosshair::before { top: 14px; left: 0; width: 30px; height: 2px; }
         .camera-crosshair::after { left: 14px; top: 0; width: 2px; height: 30px; }
+
+        /* スマホ横画面（画面高さが小さい）専用：全体をさらに縮小して1画面に収める */
+        @media (max-height: 500px) {
+            #scan-phase {
+                grid-template-columns: 1fr 140px;
+            }
+            .hud-left-bottom-controls {
+                height: 34px;
+                padding: 0 3px;
+                gap: 3px;
+            }
+            .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
+                height: 26px;
+                padding: 0 5px;
+                font-size: 9px;
+            }
+            .hud-member-status {
+                height: 26px;
+                font-size: 8px;
+                padding: 0 4px;
+                gap: 3px;
+            }
+            .online-dot { width: 5px; height: 5px; }
+            .hud-right {
+                padding: 2px;
+                gap: 2px;
+            }
+            .hud-panel-title { font-size: 7px; padding-bottom: 1px; }
+            .hud-slot-list { gap: 1px; }
+            .hud-slot-row { padding: 1px; gap: 2px; }
+            .hud-slot-row input {
+                width: 24px; min-width: 24px;
+                font-size: 11px;
+            }
+            .hud-slot-ans-zone { padding: 1px; gap: 1px; }
+            .hud-slot-ans-zone .no-img-text,
+            .hud-slot-ans-zone .err-text { font-size: 8px; }
+            .hud-control-bottom { gap: 1px; padding-top: 1px; }
+            .stocks-counter { font-size: 7px; }
+            .shutter-grid { gap: 2px; }
+            .btn-shutter-target, .btn-shutter-quest {
+                padding: 5px 0;
+                font-size: 9px;
+                border-width: 1px;
+            }
+            .toast-log { bottom: 40px; padding: 4px 8px; font-size: 9px; }
+        }
     </style>
 </head>
 <body>
