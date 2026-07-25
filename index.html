@@ -174,7 +174,7 @@
             background: var(--bg-dark);
             display: none;
             z-index: 1000;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr 420px;
         }
 
         .hud-left {
@@ -188,7 +188,6 @@
 .finder-container {
     width: 100%;
     flex: 1;
-    max-height: 75vh;
     position: relative;
     background: #000;
     overflow: hidden;
@@ -204,7 +203,7 @@
 }
 
         .hud-left-bottom-controls {
-            height: 60px;
+            height: 70px;
             background: rgba(10, 14, 20, 0.95);
             border-top: 1px solid rgba(0, 229, 255, 0.3);
             display: flex;
@@ -214,10 +213,10 @@
         }
 
         .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
-            height: 42px;
-            padding: 0 15px;
-            border-radius: 6px;
-            font-size: 13px;
+            height: 52px;
+            padding: 0 18px;
+            border-radius: 8px;
+            font-size: 15px;
             font-weight: bold;
             display: flex;
             align-items: center;
@@ -259,18 +258,18 @@
             border-left: 2px solid rgba(0, 229, 255, 0.3);
             display: flex;
             flex-direction: column;
-            padding: 6px;
+            padding: 8px;
             gap: 6px;
             height: 100%;
             overflow: hidden;
         }
 
         .hud-panel-title {
-            font-size: 10px;
+            font-size: 12px;
             color: #8cc8ff;
             text-align: center;
             border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 2px;
+            padding-bottom: 4px;
             font-weight: bold;
             letter-spacing: 1px;
         }
@@ -278,25 +277,29 @@
         .hud-slot-list {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 5px;
+            flex: 1;
+            min-height: 0;
         }
         .hud-slot-row {
             display: flex;
             align-items: center;
             background: rgba(20, 30, 45, 0.6);
             border: 1px solid rgba(140, 200, 255, 0.2);
-            border-radius: 4px;
-            padding: 3px;
-            gap: 6px;
-            height: 52px;
+            border-radius: 6px;
+            padding: 4px;
+            gap: 8px;
+            flex: 1;
+            min-height: 0;
         }
         .hud-slot-row.has-error { border-color: rgba(255, 51, 51, 0.4); background: rgba(255,0,0,0.05); }
         
         .hud-slot-row input {
-            width: 44px;
-            height: 32px;
+            width: 58px;
+            min-width: 58px;
+            height: 100%;
             padding: 2px;
-            font-size: 15px;
+            font-size: 20px;
             font-weight: bold;
             text-align: center;
             background: #000;
@@ -308,7 +311,7 @@
             flex: 1;
             height: 100%;
             background: rgba(0,0,0,0.5);
-            border-radius: 3px;
+            border-radius: 4px;
             overflow: hidden;
             display: flex !important;
             justify-content: space-around;
@@ -316,48 +319,46 @@
             border: 1px solid rgba(255,255,255,0.08);
             position: relative;
             cursor: pointer;
-            gap: 3px;
-            padding: 2px;
+            gap: 4px;
+            padding: 3px;
         }
         .hud-slot-ans-zone img {
             width: 31% !important;
-            height: auto !important;
-            max-height: 100% !important;
-            object-fit: contain;
+            height: 100% !important;
+            object-fit: cover;
             border: 1px solid rgba(0, 229, 255, 0.4);
             border-radius: 3px;
         }
-        .hud-slot-ans-zone .no-img-text { font-size: 10px; color: #445566; font-weight: bold; margin: auto; }
-        .hud-slot-ans-zone .err-text { font-size: 10px; color: var(--cyber-red); font-weight: bold; margin: auto; }
+        .hud-slot-ans-zone .no-img-text { font-size: 12px; color: #445566; font-weight: bold; margin: auto; }
+        .hud-slot-ans-zone .err-text { font-size: 12px; color: var(--cyber-red); font-weight: bold; margin: auto; }
         
         .pattern-badge {
             display: none !important;
         }
 
         .hud-control-bottom {
-            margin-top: auto;
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            padding-top: 4px;
+            gap: 6px;
+            padding-top: 6px;
             border-top: 1px solid rgba(255,255,255,0.1);
         }
-        .stocks-counter { font-size: 9px; color: #8cc8ff; font-weight: bold; text-align: center; }
+        .stocks-counter { font-size: 11px; color: #8cc8ff; font-weight: bold; text-align: center; }
 
         .shutter-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 6px;
+            gap: 8px;
         }
         .shutter-grid button { touch-action: none; }
 
         .btn-shutter-target {
-            padding: 10px 0;
-            border-radius: 6px;
+            padding: 16px 0;
+            border-radius: 8px;
             background: linear-gradient(180deg, #ffffff 0%, #b5e9ff 100%);
             border: 2px solid var(--cyber-blue);
             color: #050b14;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(0,229,255,0.2);
         }
@@ -375,12 +376,12 @@
         }
 
         .btn-shutter-quest {
-            padding: 10px 0;
-            border-radius: 6px;
+            padding: 16px 0;
+            border-radius: 8px;
             background: linear-gradient(180deg, #ffffff 0%, #e2c6ff 100%);
             border: 2px solid var(--cyber-purple);
             color: #050b14;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 900;
             box-shadow: 0 0 10px rgba(181,124,255,0.2);
         }
