@@ -1061,11 +1061,19 @@
                     });
                 }
                 
-                if (data.photoMap) {
-                    allPhotosMap = data.photoMap;
+                if (data.photoMap && Object.keys(data.photoMap).length > 0) {
+                    const incoming = data.photoMap;
+                    const merged = { ...incoming };
+                    for (const k of Object.keys(allPhotosMap)) {
+                        const local = allPhotosMap[k];
+                        if (!merged[k] || (local && local.timestamp && (!merged[k].timestamp || local.timestamp > merged[k].timestamp))) {
+                            merged[k] = local;
+                        }
+                    }
+                    allPhotosMap = merged;
                     document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
-                } else {
-                    allPhotosMap = {}; 
+                } else if (data.photoMap && Object.keys(data.photoMap).length === 0) {
+                    allPhotosMap = {};
                     document.getElementById('db-counter').innerText = "STOCKS: 0";
                 }
                 executeSearch();
@@ -1427,6 +1435,7 @@
                         };
                     }
                 });
+                allPhotosMap = mergedMap;
                 try {
                     await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
                     if (isContinuous) {
