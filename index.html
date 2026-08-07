@@ -606,7 +606,7 @@
             <div class="hud-control-bottom">
                 <div class="stocks-counter" id="db-counter">STOCKS: 0</div>
                 <div class="shutter-grid">
-                    <button class="btn-shutter-target" id="shutter-target">スキャン長押し</button>
+                    <button class="btn-shutter-target" id="shutter-target">スキャン連射</button>
                     <button class="btn-shutter-quest" id="shutter-quest">問題撮影</button>
                 </div>
             </div>
@@ -655,7 +655,7 @@
         // 連続スキャン状態
         let isContinuousScanning = false;
         let continuousSessionSeen = []; // [{text, cx, cy}] 直前の認識結果（重複判定用）
-        const SCAN_INTERVAL_MS = 1500;
+        const SCAN_INTERVAL_MS = 800;
         // 重複判定しきい値はキャプチャ幅に対する比率で算出（4Kでも手ブレで過剰ストックしない）
         const POS_DUP_FRAC = 0.05;
         const MAX_CANDIDATES = 3; // 同一数字あたりの候補スクショは常に3枚
@@ -698,15 +698,15 @@
             document.getElementById('btn-toggle-facing').addEventListener('click', toggleFacingCamera);
             document.getElementById('btn-clear-slots').addEventListener('click', clearAllSlots);
 
-            // スキャン：長押しで連続スキャン。離すと停止。
+            // スキャン：タップで連射ON/OFF切替
             const shutterTarget = document.getElementById('shutter-target');
-            shutterTarget.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                try { shutterTarget.setPointerCapture(e.pointerId); } catch (_) {}
-                startContinuousScan();
+            shutterTarget.addEventListener('click', () => {
+                if (isContinuousScanning) {
+                    stopContinuousScan();
+                } else {
+                    startContinuousScan();
+                }
             });
-            shutterTarget.addEventListener('pointerup', stopContinuousScan);
-            shutterTarget.addEventListener('pointercancel', stopContinuousScan);
             shutterTarget.addEventListener('contextmenu', (e) => e.preventDefault());
 
             // 問題撮影：タップで1回撮影
@@ -751,8 +751,8 @@
             continuousSessionSeen = [];
             const btn = document.getElementById('shutter-target');
             btn.classList.add('scanning-active');
-            btn.innerText = "スキャン中";
-            showToast("連続スキャン開始 (長押し中)");
+            btn.innerText = "スキャン中 (タップで停止)";
+            showToast("連射スキャン開始");
             continuousScanLoop();
         }
 
@@ -778,8 +778,8 @@
             isContinuousScanning = false;
             const btn = document.getElementById('shutter-target');
             btn.classList.remove('scanning-active');
-            btn.innerText = "スキャン長押し";
-            showToast("連続スキャン停止");
+            btn.innerText = "スキャン連射";
+            showToast("連射スキャン停止");
         }
 
         function clearAllSlots() {
@@ -835,21 +835,27 @@
         }
 
         // facingMode が信頼できない端末向けに、取得したトラックの設定から
-        // 前/後面カメラを判定する。track.getSettings().facingMode とラベルの両方を確認。
-        function isTrackFacing(track, want) {
+        // 前/後面カメラを判定する。true=一致確認, false=不一致確認, null=判定不能。
+        // iOS 26.52 等では facingMode や label が空になることがあるため、
+        // 確実に不一致と分かる場合のみ false を返す（未知なら null で破棄を防ぐ）。
+        function checkTrackFacing(track, want) {
             try {
                 const s = track.getSettings() || {};
                 const label = (track.label || s.label || '').toLowerCase();
                 if (want === 'environment') {
                     if (s.facingMode === 'environment') return true;
+                    if (s.facingMode === 'user') return false;
                     if (/back|rear|environment|背面|外/.test(label)) return true;
-                    return false;
+                    if (/front|user|前面|内|face/.test(label)) return false;
+                    return null;
                 } else {
                     if (s.facingMode === 'user') return true;
+                    if (s.facingMode === 'environment') return false;
                     if (/front|user|前面|内|face/.test(label)) return true;
-                    return false;
+                    if (/back|rear|environment|背面|外/.test(label)) return false;
+                    return null;
                 }
-            } catch (e) { return false; }
+            } catch (e) { return null; }
         }
 
         async function startCameraEngine() {
@@ -875,11 +881,12 @@
                 ]);
             }
 
-            // 2. 取得できた場合、望みの面と一致するか確認。不一致なら破棄して deviceId 方式へ。
+            // 2. 取得できた場合、望みの面と一致するか確認。確実に不一致の場合のみ破棄。
             if (newStream) {
                 const track = newStream.getVideoTracks()[0];
                 const wantFace = isFrontCamera ? 'user' : 'environment';
-                if (track && !isTrackFacing(track, wantFace)) {
+                const facing = track ? checkTrackFacing(track, wantFace) : null;
+                if (facing === false) {
                     newStream.getTracks().forEach(t => t.stop());
                     newStream = null;
                 }
@@ -914,7 +921,8 @@
                             ]);
                             if (s) {
                                 const track = s.getVideoTracks()[0];
-                                if (track && isTrackFacing(track, wantFace)) {
+                                const facing = track ? checkTrackFacing(track, wantFace) : null;
+                                if (facing !== false) {
                                     newStream = s;
                                     break;
                                 }
