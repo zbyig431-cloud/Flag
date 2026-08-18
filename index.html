@@ -1449,6 +1449,8 @@
                     }
                 });
                 allPhotosMap = mergedMap;
+                document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
+                executeSearch();
                 try {
                     await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
                     if (isContinuous) {
