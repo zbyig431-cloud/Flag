@@ -655,7 +655,7 @@
         // 連続スキャン状態
         let isContinuousScanning = false;
         let continuousSessionSeen = []; // [{text, cx, cy}] 直前の認識結果（重複判定用）
-        const SCAN_INTERVAL_MS = 800;
+        const SCAN_INTERVAL_MS = 500;
         // 重複判定しきい値はキャプチャ幅に対する比率で算出（4Kでも手ブレで過剰ストックしない）
         const POS_DUP_FRAC = 0.05;
         const MAX_CANDIDATES = 3; // 同一数字あたりの候補スクショは常に3枚
@@ -666,11 +666,11 @@
         const TILE_OVERLAP = 0.15;
 
         // 画質向上: APIへ送るJPEGの品質
-        const FULL_JPEG_QUALITY = 0.92;
-        const TILE_JPEG_QUALITY = 0.92;
-        const CROP_JPEG_QUALITY = 0.88;
-        // 画質維持: カメラは4Kのまま、AIへ送る画像だけ最大辺1280pxに縮小（APIタイムアウト/拒否/規制制限防止）
-        const API_MAX_DIM = 1280;
+        const FULL_JPEG_QUALITY = 0.82;
+        const TILE_JPEG_QUALITY = 0.82;
+        const CROP_JPEG_QUALITY = 0.80;
+        // 負荷軽減: APIへ送る画像を最大辺1024pxに縮小（データ量削減で応答高速化）
+        const API_MAX_DIM = 1024;
 
         const setupPhase = document.getElementById('setup-phase');
         const scanPhase = document.getElementById('scan-phase');
@@ -1075,6 +1075,10 @@
                 }
                 
                 if (data.photoMap && Object.keys(data.photoMap).length > 0) {
+                    if (Date.now() < resetGuardUntil) {
+                        executeSearch();
+                        return;
+                    }
                     const incoming = data.photoMap;
                     const merged = { ...incoming };
                     for (const k of Object.keys(allPhotosMap)) {
@@ -1429,7 +1433,7 @@
             }
 
             const matchCount = Object.keys(updates).length;
-            if (matchCount > 0) {
+            if (matchCount > 0 && Date.now() >= resetGuardUntil) {
                 const roomId = document.getElementById('room-id').value.trim() || 'default_room';
                 const mergedMap = { ...allPhotosMap };
                 Object.keys(updates).forEach(num => {
@@ -1451,17 +1455,18 @@
                 allPhotosMap = mergedMap;
                 document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
                 executeSearch();
-                try {
-                    await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
-                    if (isContinuous) {
-                        if (newNumbers.length > 0) {
-                            showToast(`+${newNumbers.length} 新規: ${newNumbers.join(", ")}`);
-                        }
-                    } else {
-                        showToast(`STOCKED: ${matchCount} UNITS`);
+                if (isContinuous) {
+                    if (newNumbers.length > 0) {
+                        showToast(`+${newNumbers.length} 新規: ${newNumbers.join(", ")}`);
                     }
-                } catch (e) {
-                    if (!isContinuous) showToast("SYNC ERROR");
+                    setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true }).catch(() => {});
+                } else {
+                    try {
+                        await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
+                        showToast(`STOCKED: ${matchCount} UNITS`);
+                    } catch (e) {
+                        showToast("SYNC ERROR");
+                    }
                 }
             } else {
                 if (!isContinuous) showToast("MATCHING CRITERIA FAILED");
@@ -1527,20 +1532,26 @@
             });
         }
 
+        let resetGuardUntil = 0;
         async function resetSystem() {
             if (!confirm("ルーム全体のデータとスロット内の数字を完全にリセットしますか？")) return;
             const roomId = document.getElementById('room-id').value.trim() || 'default_room';
+            const wasScanning = isContinuousScanning;
+            stopContinuousScan();
+            continuousSessionSeen = [];
             try {
                 searchBoxes.forEach(box => box.value = "");
                 slotPatternIndexes = [0, 0, 0, 0, 0];
                 allPhotosMap = {};
+                document.getElementById('db-counter').innerText = "STOCKS: 0";
+                executeSearch();
 
+                resetGuardUntil = Date.now() + 3000;
                 await setDoc(doc(db, "rooms", roomId), {
                     currentQueries: ["", "", "", "", ""],
                     photoMap: {}
                 }, { merge: true });
 
-                executeSearch();
                 showToast("ROOM & SLOTS RESET COMPLETE");
             } catch(e) {
                 showToast("RESET ERROR");
