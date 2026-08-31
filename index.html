@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>N トワもんGemini</title>
-    <!-- Supabase JS (v2) via CDN ESM -->
+    <!-- Firebase SDK (v10) -->
     <script type="importmap">
       {
         "imports": {
-          "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm"
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
         }
       }
     </script>
@@ -627,13 +628,20 @@
 
     <canvas id="split-work-canvas" style="display:none;"></canvas>
     <script type="module">
-        import { createClient } from "@supabase/supabase-js";
+        import { initializeApp } from "firebase/app";
+        import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
-        const SUPABASE_URL = "https://0ec90b57d6e95fcbda19832f.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJib2x0IiwicmVmIjoiMGVjOTBiNTdkNmU5NWZjYmRhMTk4MzJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4ODE1NzQsImV4cCI6MTc1ODg4MTU3NH0.9I8-U0x86Ak8t2DGaIk0HfvTSLsAyzdnz-Nw00mMkKw";
+        const firebaseConfig = {
+            apiKey: "AIzaSyAqjlpWIPNCQVJqVnl_M4Orm3gZrnCULfM",
+            authDomain: "tmon-gemini.firebaseapp.com",
+            projectId: "tmon-gemini",
+            storageBucket: "tmon-gemini.firebasestorage.app",
+            messagingSenderId: "90913647133",
+            appId: "1:90913647133:web:10185c7981f69e10f95c34"
+        };
 
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        let roomChannel = null;
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         let localStream = null;
         let allPhotosMap = {}; 
@@ -1024,39 +1032,10 @@
             stopContinuousScan();
             if(localStream) { localStream.getTracks().forEach(track => track.stop()); localStream = null; }
             if (document.exitFullscreen) { document.exitFullscreen().catch(()=>{}); }
-            if(unsubscribeRoom) { unsubscribeRoom = null; }
-            if (roomChannel) { roomChannel.unsubscribe(); roomChannel = null; }
+            if(unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
             clearInterval(presenceInterval);
             scanPhase.style.display = 'none';
             setupPhase.style.display = 'flex';
-        }
-
-        async function upsertRoom(roomId, patch) {
-            try {
-                const { data: existing } = await supabase
-                    .from('room_sync')
-                    .select('room_id, photo_map, current_queries, members')
-                    .eq('room_id', roomId)
-                    .maybeSingle();
-                if (existing) {
-                    const update = { updated_at: new Date().toISOString() };
-                    if (patch.photo_map !== undefined) update.photo_map = patch.photo_map;
-                    if (patch.current_queries !== undefined) update.current_queries = patch.current_queries;
-                    if (patch.members !== undefined) {
-                        const base = existing.members || {};
-                        update.members = { ...base, ...patch.members };
-                    }
-                    await supabase.from('room_sync').update(update).eq('room_id', roomId);
-                } else {
-                    await supabase.from('room_sync').insert({
-                        room_id: roomId,
-                        photo_map: patch.photo_map || {},
-                        current_queries: patch.current_queries || [],
-                        members: patch.members || {},
-                        updated_at: new Date().toISOString()
-                    });
-                }
-            } catch(e) {}
         }
 
         function startFirebaseRoomSync() {
@@ -1067,76 +1046,62 @@
             const reportPresence = async () => {
                 const rId = document.getElementById('room-id').value.trim() || 'default_room';
                 const uName = document.getElementById('user-name').value.trim() || 'Unknown';
-                try { await upsertRoom(rId, { members: { [uName]: Date.now() } }); } catch(e){}
+                try { await setDoc(doc(db, "rooms", rId), { members: { [uName]: Date.now() } }, { merge: true }); } catch(e){}
             };
             reportPresence();
             presenceInterval = setInterval(reportPresence, 4000);
 
-            if (roomChannel) { roomChannel.unsubscribe(); roomChannel = null; }
-
-            supabase.from('room_sync').select('room_id, photo_map, current_queries, members')
-                .eq('room_id', roomId).maybeSingle().then(({ data }) => {
-                    if (data) applyRoomData(data);
-                });
-
-            roomChannel = supabase.channel('room_' + roomId)
-                .on('postgres_changes',
-                    { event: '*', schema: 'public', table: 'room_sync', filter: `room_id=eq.${roomId}` },
-                    (payload) => {
-                        if (payload.eventType === 'DELETE' || !payload.new) {
-                            allPhotosMap = {};
-                            document.getElementById('db-counter').innerText = "STOCKS: 0";
-                            executeSearch();
-                            return;
-                        }
-                        applyRoomData(payload.new);
-                    }
-                )
-                .subscribe();
-        }
-
-        function applyRoomData(data) {
-            if (data.members) {
-                const now = Date.now();
-                const activeMembers = Object.keys(data.members).filter(name => (now - data.members[name]) < 10000);
-                document.getElementById('member-list-text').innerText = `ONLINE: ${activeMembers.join(', ')}`;
-            }
-
-            if (data.current_queries) {
-                data.current_queries.forEach((q, idx) => {
-                    if (document.activeElement !== searchBoxes[idx]) {
-                        searchBoxes[idx].value = q || "";
-                    }
-                });
-            }
-
-            const remotePhotoMap = data.photo_map || {};
-            if (Object.keys(remotePhotoMap).length > 0) {
-                if (Date.now() < resetGuardUntil) {
-                    executeSearch();
+            unsubscribeRoom = onSnapshot(doc(db, "rooms", roomId), (snapshot) => {
+                if (!snapshot.exists()) {
+                    allPhotosMap = {}; 
+                    document.getElementById('db-counter').innerText = "STOCKS: 0"; 
+                    executeSearch(); 
                     return;
                 }
-                const merged = { ...remotePhotoMap };
-                for (const k of Object.keys(allPhotosMap)) {
-                    const local = allPhotosMap[k];
-                    if (!merged[k] || (local && local.timestamp && (!merged[k].timestamp || local.timestamp > merged[k].timestamp))) {
-                        merged[k] = local;
-                    }
+                const data = snapshot.data();
+                
+                if (data.members) {
+                    const now = Date.now();
+                    const activeMembers = Object.keys(data.members).filter(name => (now - data.members[name]) < 10000);
+                    document.getElementById('member-list-text').innerText = `ONLINE: ${activeMembers.join(', ')}`;
                 }
-                allPhotosMap = merged;
-                document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
-            } else {
-                allPhotosMap = {};
-                document.getElementById('db-counter').innerText = "STOCKS: 0";
-            }
-            executeSearch();
+                
+                if (data.currentQueries) {
+                    data.currentQueries.forEach((q, idx) => {
+                        if (document.activeElement !== searchBoxes[idx]) { 
+                            searchBoxes[idx].value = q || ""; 
+                        }
+                    });
+                }
+                
+                if (data.photoMap && Object.keys(data.photoMap).length > 0) {
+                    if (Date.now() < resetGuardUntil) {
+                        executeSearch();
+                        return;
+                    }
+                    const incoming = data.photoMap;
+                    const merged = { ...incoming };
+                    for (const k of Object.keys(allPhotosMap)) {
+                        const local = allPhotosMap[k];
+                        if (!merged[k] || (local && local.timestamp && (!merged[k].timestamp || local.timestamp > merged[k].timestamp))) {
+                            merged[k] = local;
+                        }
+                    }
+                    allPhotosMap = merged;
+                    document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
+                } else if (data.photoMap && Object.keys(data.photoMap).length === 0) {
+                    allPhotosMap = {};
+                    document.getElementById('db-counter').innerText = "STOCKS: 0";
+                }
+                executeSearch();
+            });
         }
 
         async function syncInputsToFirebase() {
             const roomId = document.getElementById('room-id').value.trim() || 'default_room';
             const queries = searchBoxes.map(b => b.value.trim());
-            try {
-                await upsertRoom(roomId, { current_queries: queries });
+            try { 
+                await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
             } catch(e) {}
         }
 
@@ -1494,10 +1459,10 @@
                     if (newNumbers.length > 0) {
                         showToast(`+${newNumbers.length} 新規: ${newNumbers.join(", ")}`);
                     }
-                    upsertRoom(roomId, { photo_map: mergedMap }).catch(() => {});
+                    setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true }).catch(() => {});
                 } else {
                     try {
-                        await upsertRoom(roomId, { photo_map: mergedMap });
+                        await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
                         showToast(`STOCKED: ${matchCount} UNITS`);
                     } catch (e) {
                         showToast("SYNC ERROR");
@@ -1582,10 +1547,10 @@
                 executeSearch();
 
                 resetGuardUntil = Date.now() + 3000;
-                await upsertRoom(roomId, {
-                    current_queries: ["", "", "", "", ""],
-                    photo_map: {}
-                });
+                await setDoc(doc(db, "rooms", roomId), {
+                    currentQueries: ["", "", "", "", ""],
+                    photoMap: {}
+                }, { merge: true });
 
                 showToast("ROOM & SLOTS RESET COMPLETE");
             } catch(e) {
