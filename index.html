@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>N トワもんGemini</title>
-    <!-- Firebase SDK (v10) -->
+    <!-- Supabase JS (v2) via CDN ESM -->
     <script type="importmap">
       {
         "imports": {
-          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+          "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm"
         }
       }
     </script>
@@ -170,6 +169,31 @@
             font-size: 13px;
         }
 
+        .room-selector {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .room-btn {
+            background: rgba(0, 229, 255, 0.08);
+            border: 1px solid var(--panel-border);
+            color: #8cc8ff;
+            padding: 14px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 4px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .room-btn:active { background: var(--cyber-blue); color: #000; }
+        .room-btn.active {
+            background: linear-gradient(135deg, #0077ff, var(--cyber-blue));
+            color: #fff;
+            border-color: var(--cyber-blue);
+            box-shadow: 0 0 12px rgba(0,229,255,0.4);
+        }
+
         .usage-guide {
             background: var(--panel-bg);
             border: 1px solid var(--panel-border);
@@ -273,7 +297,7 @@
             overflow-y: hidden;
         }
 
-        .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
+        .btn-exit-icon, .btn-zoom-toggle, .btn-clear-slots, .btn-reset-room {
             height: 80%;
             min-height: 30px;
             padding: 0 16px;
@@ -302,12 +326,12 @@
         }
         .btn-zoom-toggle:active { background: var(--cyber-blue); color: #000; }
 
-        .btn-camera-toggle {
-            background: rgba(181, 124, 255, 0.1);
-            border: 1px solid var(--cyber-purple);
-            color: var(--cyber-purple);
+        .btn-reset-room {
+            background: rgba(255, 51, 51, 0.1);
+            border: 1px solid var(--cyber-red);
+            color: var(--cyber-red);
         }
-        .btn-camera-toggle:active { background: var(--cyber-purple); color: #000; }
+        .btn-reset-room:active { background: var(--cyber-red); color: #fff; }
 
         .btn-clear-slots {
             background: rgba(255, 145, 0, 0.1);
@@ -483,7 +507,7 @@
                 padding: 0 4px;
                 gap: 4px;
             }
-            .btn-exit-icon, .btn-zoom-toggle, .btn-camera-toggle, .btn-clear-slots {
+            .btn-exit-icon, .btn-zoom-toggle, .btn-clear-slots, .btn-reset-room {
                 height: 26px;
                 min-height: 26px;
                 padding: 0 6px;
@@ -526,8 +550,15 @@
         <h1>トワもんGemini</h1>
         <div class="config-box">
             <div>
-                <label>ROOM ID:</label>
-                <input type="text" id="room-id" placeholder="team1">
+                <label>ROOM 選択:</label>
+                <div class="room-selector" id="room-selector">
+                    <button class="room-btn" data-room="room1">1</button>
+                    <button class="room-btn" data-room="room2">2</button>
+                    <button class="room-btn" data-room="room3">3</button>
+                    <button class="room-btn" data-room="room4">4</button>
+                    <button class="room-btn" data-room="room5">5</button>
+                </div>
+                <input type="hidden" id="room-id" value="room1">
             </div>
             <div>
                 <label>PLAYER NAME:</label>
@@ -540,18 +571,18 @@
         </div>
         <div class="action-grid">
             <button class="btn-start-scan" id="btn-enter-scan">スキャンモード</button>
-            <button class="btn-reset-system" id="btn-reset-all">ルームリセット</button>
         </div>
         <div class="usage-guide">
             <h2>使い方と注意点</h2>
             <h3>使い方</h3>
             <ul>
-                <li>ROOM ID・PLAYER NAME・PASS WORD を入力し「スキャンモード」を押すと撮影画面に移動します</li>
+                <li>ROOM 1〜5 のボタンから選択し、PLAYER NAME・PASS WORD を入力して「スキャンモード」を押すと撮影画面に移動します</li>
                 <li>「問題撮影」ボタンをタップすると問題文を撮影し、読み取った数字はスロット内に自動入力されます</li>
                 <li>再度問題文の撮影を行うと、スロット内の数字が上書きされます</li>
                 <li>「クリア」ボタンでスロットを全消去できます</li>
-                <li>「1.0/0.5」でズーム切替、「外カメ」でカメラの表/裏を切り替えられます</li>
-                <li>同じ ROOM ID のメンバーと数字・画像をリアルタイム共有します</li>
+                <li>「1.0/0.5」でズーム切替ができます</li>
+                <li>同じ ROOM のメンバーと数字・画像をリアルタイム共有します</li>
+                <li>撮影画面の「ルームリセット」でストックとスロットをリセットできます（確認ダイアログあり）</li>
             </ul>
             <h3>注意点</h3>
             <ul class="warn">
@@ -559,7 +590,6 @@
                 <li>カメラへのアクセス許可が必要です。ブラウザの設定で許可してください</li>
                 <li>スキャン中は手ブレやピンボケると認識精度が下がります。安定した状態で撮影してください</li>
                 <li>「ルームリセット」を押すと共有中のデータがすべて消去されます。メンバー全員に影響します</li>
-                <li>通信環境が悪いと共有に遅延が出ます。安定したネットワークでご利用ください</li>
                 <li>問題を撮影する際は、問題となる数字だけを映すようにしてください</li>
                 <li>小さすぎる数字、ぼやけた数字はうまく認識できない場合があります。必要に応じて倍率の変更を行ってください</li>
                 <li>無許可での共有、使用はしないようお願いします。バグや不具合はトワもんにご連絡ください</li>
@@ -615,12 +645,12 @@
         <div class="hud-left-bottom-controls">
             <button class="btn-exit-icon" id="btn-exit-scan">ホームへ</button>
             <button class="btn-zoom-toggle" id="btn-toggle-lens">1.0/0.5</button>
-            <button class="btn-camera-toggle" id="btn-toggle-facing">外カメ</button>
             <div class="hud-member-status">
                 <span class="online-dot"></span>
                 <span id="member-list-text">ONLINE: 待機中...</span>
             </div>
             <button class="btn-clear-slots" id="btn-clear-slots">クリア</button>
+            <button class="btn-reset-room" id="btn-reset-room">ルームリセット</button>
         </div>
 
         <div class="toast-log" id="toast-log">SCANNING...</div>
@@ -628,20 +658,13 @@
 
     <canvas id="split-work-canvas" style="display:none;"></canvas>
     <script type="module">
-        import { initializeApp } from "firebase/app";
-        import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+        import { createClient } from "@supabase/supabase-js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyAV3xMWK2-Nct-CCq0n0ERD4QwV5s5jgkE",
-            authDomain: "tmon-gemini.firebaseapp.com",
-            projectId: "tmon-gemini",
-            storageBucket: "tmon-gemini.firebasestorage.app",
-            messagingSenderId: "90913647133",
-            appId: "1:90913647133:web:10185c7981f69e10f95c34"
-        };
+        const SUPABASE_URL = "https://0ec90b57d6e95fcbda19832f.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJib2x0IiwicmVmIjoiMGVjOTBiNTdkNmU5NWZjYmRhMTk4MzJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg4ODE1NzQsImV4cCI6MTc1ODg4MTU3NH0.9I8-U0x86Ak8t2DGaIk0HfvTSLsAyzdnz-Nw00mMkKw";
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let roomChannel = null;
 
         let localStream = null;
         let allPhotosMap = {}; 
@@ -691,12 +714,20 @@
         });
 
         function initEventListeners() {
-            document.getElementById('btn-enter-scan').addEventListener('click', () => { isUltraWideMode = true; isFrontCamera = false; updateFacingButtonLabel(); startCameraEngine(); });
+            document.getElementById('btn-enter-scan').addEventListener('click', () => { isUltraWideMode = true; isFrontCamera = false; startCameraEngine(); });
             document.getElementById('btn-exit-scan').addEventListener('click', exitScanMode);
-            document.getElementById('btn-reset-all').addEventListener('click', resetSystem);
+            document.getElementById('btn-reset-room').addEventListener('click', resetSystem);
             document.getElementById('btn-toggle-lens').addEventListener('click', toggleCameraLens);
-            document.getElementById('btn-toggle-facing').addEventListener('click', toggleFacingCamera);
             document.getElementById('btn-clear-slots').addEventListener('click', clearAllSlots);
+
+            document.querySelectorAll('.room-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.room-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById('room-id').value = btn.dataset.room;
+                    saveConfig();
+                });
+            });
 
             // スキャン：タップで連射ON/OFF切替
             const shutterTarget = document.getElementById('shutter-target');
@@ -716,7 +747,7 @@
                 });
             });
 
-            ['room-id', 'user-name', 'api-key'].forEach(id => {
+            ['user-name', 'api-key'].forEach(id => {
                 document.getElementById(id).addEventListener('input', saveConfig);
             });
 
@@ -764,8 +795,11 @@
                     continuousErrorCount = 0;
                 } catch (err) {
                     continuousErrorCount++;
-                    if (continuousErrorCount <= 2) {
-                        showToast("スキャンエラー リトライ中...");
+                    const detail = (err && err.message) ? err.message.slice(0, 90) : "原因不明のエラー";
+                    showToast(`スキャンエラー: ${detail}`);
+                    if (continuousErrorCount >= 3) {
+                        stopContinuousScan();
+                        showToast(`スキャン停止: ${detail}`);
                     }
                 }
                 if (!isContinuousScanning) break;
@@ -1016,26 +1050,43 @@
             startCameraEngine();
         }
 
-        function toggleFacingCamera() {
-            isFrontCamera = !isFrontCamera;
-            updateFacingButtonLabel();
-            showToast(isFrontCamera ? "SWITCHING TO 内カメ..." : "SWITCHING TO 外カメ...");
-            startCameraEngine();
-        }
-
-        function updateFacingButtonLabel() {
-            const btn = document.getElementById('btn-toggle-facing');
-            if (btn) btn.innerText = isFrontCamera ? "内カメ" : "外カメ";
-        }
-
         function exitScanMode() {
             stopContinuousScan();
             if(localStream) { localStream.getTracks().forEach(track => track.stop()); localStream = null; }
             if (document.exitFullscreen) { document.exitFullscreen().catch(()=>{}); }
-            if(unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
+            if(unsubscribeRoom) { unsubscribeRoom = null; }
+            if (roomChannel) { roomChannel.unsubscribe(); roomChannel = null; }
             clearInterval(presenceInterval);
             scanPhase.style.display = 'none';
             setupPhase.style.display = 'flex';
+        }
+
+        async function upsertRoom(roomId, patch) {
+            try {
+                const { data: existing } = await supabase
+                    .from('room_sync')
+                    .select('room_id, photo_map, current_queries, members')
+                    .eq('room_id', roomId)
+                    .maybeSingle();
+                if (existing) {
+                    const update = { updated_at: new Date().toISOString() };
+                    if (patch.photo_map !== undefined) update.photo_map = patch.photo_map;
+                    if (patch.current_queries !== undefined) update.current_queries = patch.current_queries;
+                    if (patch.members !== undefined) {
+                        const base = existing.members || {};
+                        update.members = { ...base, ...patch.members };
+                    }
+                    await supabase.from('room_sync').update(update).eq('room_id', roomId);
+                } else {
+                    await supabase.from('room_sync').insert({
+                        room_id: roomId,
+                        photo_map: patch.photo_map || {},
+                        current_queries: patch.current_queries || [],
+                        members: patch.members || {},
+                        updated_at: new Date().toISOString()
+                    });
+                }
+            } catch(e) {}
         }
 
         function startFirebaseRoomSync() {
@@ -1046,62 +1097,76 @@
             const reportPresence = async () => {
                 const rId = document.getElementById('room-id').value.trim() || 'default_room';
                 const uName = document.getElementById('user-name').value.trim() || 'Unknown';
-                try { await setDoc(doc(db, "rooms", rId), { members: { [uName]: Date.now() } }, { merge: true }); } catch(e){}
+                try { await upsertRoom(rId, { members: { [uName]: Date.now() } }); } catch(e){}
             };
             reportPresence();
             presenceInterval = setInterval(reportPresence, 4000);
 
-            unsubscribeRoom = onSnapshot(doc(db, "rooms", roomId), (snapshot) => {
-                if (!snapshot.exists()) {
-                    allPhotosMap = {}; 
-                    document.getElementById('db-counter').innerText = "STOCKS: 0"; 
-                    executeSearch(); 
+            if (roomChannel) { roomChannel.unsubscribe(); roomChannel = null; }
+
+            supabase.from('room_sync').select('room_id, photo_map, current_queries, members')
+                .eq('room_id', roomId).maybeSingle().then(({ data }) => {
+                    if (data) applyRoomData(data);
+                });
+
+            roomChannel = supabase.channel('room_' + roomId)
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'room_sync', filter: `room_id=eq.${roomId}` },
+                    (payload) => {
+                        if (payload.eventType === 'DELETE' || !payload.new) {
+                            allPhotosMap = {};
+                            document.getElementById('db-counter').innerText = "STOCKS: 0";
+                            executeSearch();
+                            return;
+                        }
+                        applyRoomData(payload.new);
+                    }
+                )
+                .subscribe();
+        }
+
+        function applyRoomData(data) {
+            if (data.members) {
+                const now = Date.now();
+                const activeMembers = Object.keys(data.members).filter(name => (now - data.members[name]) < 10000);
+                document.getElementById('member-list-text').innerText = `ONLINE: ${activeMembers.join(', ')}`;
+            }
+
+            if (data.current_queries) {
+                data.current_queries.forEach((q, idx) => {
+                    if (document.activeElement !== searchBoxes[idx]) {
+                        searchBoxes[idx].value = q || "";
+                    }
+                });
+            }
+
+            const remotePhotoMap = data.photo_map || {};
+            if (Object.keys(remotePhotoMap).length > 0) {
+                if (Date.now() < resetGuardUntil) {
+                    executeSearch();
                     return;
                 }
-                const data = snapshot.data();
-                
-                if (data.members) {
-                    const now = Date.now();
-                    const activeMembers = Object.keys(data.members).filter(name => (now - data.members[name]) < 10000);
-                    document.getElementById('member-list-text').innerText = `ONLINE: ${activeMembers.join(', ')}`;
-                }
-                
-                if (data.currentQueries) {
-                    data.currentQueries.forEach((q, idx) => {
-                        if (document.activeElement !== searchBoxes[idx]) { 
-                            searchBoxes[idx].value = q || ""; 
-                        }
-                    });
-                }
-                
-                if (data.photoMap && Object.keys(data.photoMap).length > 0) {
-                    if (Date.now() < resetGuardUntil) {
-                        executeSearch();
-                        return;
+                const merged = { ...remotePhotoMap };
+                for (const k of Object.keys(allPhotosMap)) {
+                    const local = allPhotosMap[k];
+                    if (!merged[k] || (local && local.timestamp && (!merged[k].timestamp || local.timestamp > merged[k].timestamp))) {
+                        merged[k] = local;
                     }
-                    const incoming = data.photoMap;
-                    const merged = { ...incoming };
-                    for (const k of Object.keys(allPhotosMap)) {
-                        const local = allPhotosMap[k];
-                        if (!merged[k] || (local && local.timestamp && (!merged[k].timestamp || local.timestamp > merged[k].timestamp))) {
-                            merged[k] = local;
-                        }
-                    }
-                    allPhotosMap = merged;
-                    document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
-                } else if (data.photoMap && Object.keys(data.photoMap).length === 0) {
-                    allPhotosMap = {};
-                    document.getElementById('db-counter').innerText = "STOCKS: 0";
                 }
-                executeSearch();
-            });
+                allPhotosMap = merged;
+                document.getElementById('db-counter').innerText = `STOCKS: ${Object.keys(allPhotosMap).length}`;
+            } else {
+                allPhotosMap = {};
+                document.getElementById('db-counter').innerText = "STOCKS: 0";
+            }
+            executeSearch();
         }
 
         async function syncInputsToFirebase() {
             const roomId = document.getElementById('room-id').value.trim() || 'default_room';
             const queries = searchBoxes.map(b => b.value.trim());
-            try { 
-                await setDoc(doc(db, "rooms", roomId), { currentQueries: queries }, { merge: true }); 
+            try {
+                await upsertRoom(roomId, { current_queries: queries });
             } catch(e) {}
         }
 
@@ -1183,6 +1248,11 @@
                 }
                 if (!resData.responses[0].textAnnotations) return [];
                 return resData.responses[0].textAnnotations;
+            } catch (err) {
+                if (err && err.name === "AbortError") {
+                    throw new Error("APIタイムアウト（20秒）");
+                }
+                throw err;
             } finally {
                 clearTimeout(timer);
             }
@@ -1280,7 +1350,8 @@
                     const annotations = await callVisionAPI(apiKey, fullBase64);
                     await analyzeQuestionModeAdvanced(annotations);
                 } catch (err) {
-                    if (!isContinuous) showToast("API DETECT ERROR");
+                    const detail = (err && err.message) ? err.message.slice(0, 90) : "原因不明のエラー";
+                    showToast(`APIエラー: ${detail}`);
                 }
                 return;
             }
@@ -1459,10 +1530,10 @@
                     if (newNumbers.length > 0) {
                         showToast(`+${newNumbers.length} 新規: ${newNumbers.join(", ")}`);
                     }
-                    setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true }).catch(() => {});
+                    upsertRoom(roomId, { photo_map: mergedMap }).catch(() => {});
                 } else {
                     try {
-                        await setDoc(doc(db, "rooms", roomId), { photoMap: mergedMap }, { merge: true });
+                        await upsertRoom(roomId, { photo_map: mergedMap });
                         showToast(`STOCKED: ${matchCount} UNITS`);
                     } catch (e) {
                         showToast("SYNC ERROR");
@@ -1547,10 +1618,10 @@
                 executeSearch();
 
                 resetGuardUntil = Date.now() + 3000;
-                await setDoc(doc(db, "rooms", roomId), {
-                    currentQueries: ["", "", "", "", ""],
-                    photoMap: {}
-                }, { merge: true });
+                await upsertRoom(roomId, {
+                    current_queries: ["", "", "", "", ""],
+                    photo_map: {}
+                });
 
                 showToast("ROOM & SLOTS RESET COMPLETE");
             } catch(e) {
@@ -1558,14 +1629,20 @@
             }
         }
 
+        const API_KEY_STORAGE_KEY = 'cyber_ocr_api_key_v2';
+
         function saveConfig() {
-            localStorage.setItem('cyber_ocr_api_key', document.getElementById('api-key').value);
+            localStorage.setItem(API_KEY_STORAGE_KEY, document.getElementById('api-key').value);
             localStorage.setItem('cyber_room_id', document.getElementById('room-id').value);
             localStorage.setItem('cyber_user_name', document.getElementById('user-name').value);
         }
         function loadConfig() {
-            document.getElementById('api-key').value = localStorage.getItem('cyber_ocr_api_key') || "";
-            document.getElementById('room-id').value = localStorage.getItem('cyber_room_id') || "team1";
+            document.getElementById('api-key').value = localStorage.getItem(API_KEY_STORAGE_KEY) || "";
+            const savedRoom = localStorage.getItem('cyber_room_id') || "room1";
+            document.getElementById('room-id').value = savedRoom;
+            document.querySelectorAll('.room-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.room === savedRoom);
+            });
             document.getElementById('user-name').value = localStorage.getItem('cyber_user_name') || "";
         }
         function showToast(msg) {
