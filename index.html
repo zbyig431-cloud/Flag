@@ -629,7 +629,7 @@
     <canvas id="split-work-canvas" style="display:none;"></canvas>
     <script type="module">
         import { initializeApp } from "firebase/app";
-        import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence, enableNetwork, disableNetwork } from "firebase/firestore";
+        import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAqjlpWIPNCQVJqVnl_M4Orm3gZrnCULfM",
@@ -642,9 +642,6 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-
-        // オフライン永続化を有効化: 通信が切れてもキャッシュが残り、復帰後に自動再同期される
-        enableIndexedDbPersistence(db).catch(() => {});
 
         let localStream = null;
         let allPhotosMap = {}; 
@@ -691,67 +688,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadConfig();
             initEventListeners();
-            initConnectionWatchdog();
         });
-
-        // ─── 接続維持・自動再接続 ───
-        // スマホで画面を閉じたりアプリを切り替えたりすると、ブラウザがFirestoreの
-        // リアルタイム接続（WebSocket）を切断する。ページが再表示されたときに
-        // 接続を再確立し、共有が途切れないようにする。
-        let isOnline = navigator.onLine;
-        let lastSyncedRoomId = null;
-
-        function initConnectionWatchdog() {
-            // ページが再表示されたとき（タブ切り替え・画面復帰）に接続を再確立
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    handleReconnect();
-                }
-            });
-
-            // ネットワーク復旧時に接続を再確立
-            window.addEventListener('online', () => {
-                isOnline = true;
-                handleReconnect();
-            });
-
-            window.addEventListener('offline', () => {
-                isOnline = false;
-            });
-        }
-
-        async function handleReconnect() {
-            // スキャン画面が表示中のときだけ再接続処理を行う
-            if (scanPhase.style.display !== 'grid') return;
-
-            // Firestoreのネットワークを再有効化（バックグラウンドで切断されている場合がある）
-            try {
-                await enableNetwork(db);
-            } catch (e) {}
-
-            // onSnapshotリスナーを貼り直す（古いリスナーは破棄）
-            if (lastSyncedRoomId) {
-                if (unsubscribeRoom) {
-                    unsubscribeRoom();
-                    unsubscribeRoom = null;
-                }
-                // 少し待ってから再購読（ネットワークが完全に復帰する時間を確保）
-                setTimeout(() => {
-                    if (scanPhase.style.display === 'grid') {
-                        subscribeRoom(lastSyncedRoomId);
-                    }
-                }, 500);
-            }
-
-            // プレゼンス（生存通知）も即座に送信
-            reportPresenceNow();
-        }
-
-        function reportPresenceNow() {
-            const rId = document.getElementById('room-id').value.trim() || 'default_room';
-            const uName = document.getElementById('user-name').value.trim() || 'Unknown';
-            setDoc(doc(db, "rooms", rId), { members: { [uName]: Date.now() } }, { merge: true }).catch(() => {});
-        }
 
         function initEventListeners() {
             document.getElementById('btn-enter-scan').addEventListener('click', () => { isUltraWideMode = true; isFrontCamera = false; updateFacingButtonLabel(); startCameraEngine(); });
@@ -1097,24 +1034,22 @@
             if (document.exitFullscreen) { document.exitFullscreen().catch(()=>{}); }
             if(unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
             clearInterval(presenceInterval);
-            lastSyncedRoomId = null;
             scanPhase.style.display = 'none';
             setupPhase.style.display = 'flex';
         }
 
         function startFirebaseRoomSync() {
             const roomId = document.getElementById('room-id').value.trim() || 'default_room';
-            lastSyncedRoomId = roomId;
+            const user = document.getElementById('user-name').value.trim() || 'Unknown';
 
             if(presenceInterval) clearInterval(presenceInterval);
-            reportPresenceNow();
-            presenceInterval = setInterval(reportPresenceNow, 4000);
-
-            subscribeRoom(roomId);
-        }
-
-        function subscribeRoom(roomId) {
-            if (unsubscribeRoom) { unsubscribeRoom(); unsubscribeRoom = null; }
+            const reportPresence = async () => {
+                const rId = document.getElementById('room-id').value.trim() || 'default_room';
+                const uName = document.getElementById('user-name').value.trim() || 'Unknown';
+                try { await setDoc(doc(db, "rooms", rId), { members: { [uName]: Date.now() } }, { merge: true }); } catch(e){}
+            };
+            reportPresence();
+            presenceInterval = setInterval(reportPresence, 4000);
 
             unsubscribeRoom = onSnapshot(doc(db, "rooms", roomId), (snapshot) => {
                 if (!snapshot.exists()) {
